@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { CreateClassCourseDto } from './dto/create-class-course.dto';
 import { UpdateClassCourseDto } from './dto/update-class-course.dto';
 import { ClassCourse } from './entities/class-course.entity';
@@ -26,6 +26,7 @@ export class ClassCourseService {
 
   async create(dto: CreateClassCourseDto, companyId: number): Promise<ClassCourse> {
     await this.ensureForeignKeys(dto, companyId);
+    await this.ensureNotDuplicate(dto, companyId);
 
     const entity = this.repo.create({
       ...dto,
@@ -37,6 +38,51 @@ export class ClassCourseService {
       return this.findOne(saved.id, companyId);
     } catch (error) {
       throw new BadRequestException('Failed to create class course');
+    }
+  }
+
+  async createMany(dtos: CreateClassCourseDto[], companyId: number): Promise<ClassCourse[]> {
+    if (!dtos || dtos.length === 0) {
+      throw new BadRequestException('At least one class course is required');
+    }
+
+    const seenCombos = new Set<string>();
+    for (const dto of dtos) {
+      await this.ensureForeignKeys(dto, companyId);
+      await this.ensureNotDuplicate(dto, companyId);
+
+      const key = `${dto.level_id}|${dto.module_id}|${dto.course_id}`;
+      if (seenCombos.has(key)) {
+        throw new BadRequestException(
+          'Duplicate class course combination (level, module, course) found in request payload',
+        );
+      }
+      seenCombos.add(key);
+    }
+
+    const entities = dtos.map(dto =>
+      this.repo.create({
+        ...dto,
+        company_id: companyId,
+      }),
+    );
+
+    try {
+      const saved = await this.repo.save(entities);
+      const ids = saved.map(entity => entity.id);
+
+      return this.repo
+        .createQueryBuilder('cc')
+        .leftJoinAndSelect('cc.level', 'level')
+        .leftJoinAndSelect('level.specialization', 'specialization')
+        .leftJoinAndSelect('specialization.program', 'program')
+        .leftJoinAndSelect('cc.module', 'module')
+        .leftJoinAndSelect('cc.course', 'course')
+        .where('cc.company_id = :companyId', { companyId })
+        .andWhere('cc.id IN (:...ids)', { ids })
+        .getMany();
+    } catch (error) {
+      throw new BadRequestException('Failed to create class courses');
     }
   }
 
@@ -129,6 +175,29 @@ export class ClassCourseService {
       this.ensureScopedEntity(this.moduleRepo, 'mod', dto.module_id, companyId, 'Module', { allowNullCompany: true }),
       this.ensureScopedEntity(this.courseRepo, 'course', dto.course_id, companyId, 'Course', { allowNullCompany: true }),
     ]);
+  }
+
+  private async ensureNotDuplicate(
+    dto: Partial<Pick<CreateClassCourseDto, 'level_id' | 'module_id' | 'course_id'>>,
+    companyId: number,
+  ): Promise<void> {
+    if (!dto.level_id || !dto.module_id || !dto.course_id) return;
+
+    const existing = await this.repo.findOne({
+      where: {
+        company_id: companyId,
+        level_id: dto.level_id,
+        module_id: dto.module_id,
+        course_id: dto.course_id,
+        status: Not(-2),
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        'A class course with the same level, module and course already exists',
+      );
+    }
   }
 
   private async ensureScopedEntity<T extends { status?: number; company_id?: number }>(

@@ -6,6 +6,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Unique,
 } from 'typeorm';
 import { Company } from '../../company/entities/company.entity';
 import { Module as ModuleEntity } from '../../module/entities/module.entity';
@@ -13,6 +14,12 @@ import { Course } from '../../course/entities/course.entity';
 import { Level } from '../../level/entities/level.entity';
 
 @Entity('class_courses')
+@Unique('UQ_class_courses_company_level_module_course', [
+  'company_id',
+  'level_id',
+  'module_id',
+  'course_id',
+])
 export class ClassCourse {
   @PrimaryGeneratedColumn()
   id: number;
@@ -50,6 +57,12 @@ export class ClassCourse {
   @ManyToOne(() => Course, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'course_id' })
   course: Course;
+
+  @Column({ type: 'int', nullable: true, name: 'module_coefficient' })
+  moduleCoefficient?: number;
+
+  @Column({ type: 'int', nullable: true, name: 'course_coefficient' })
+  courseCoefficient?: number;
 
   @Column({ type: 'int', nullable: true })
   volume?: number;

@@ -46,6 +46,20 @@ export class CreateClassCourseDto {
   @Min(1)
   course_id: number;
 
+  @ApiPropertyOptional({ description: 'Module coefficient', minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  moduleCoefficient?: number;
+
+  @ApiPropertyOptional({ description: 'Course coefficient', minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  courseCoefficient?: number;
+
   @ApiPropertyOptional({ description: 'Total volume (hours) for the course', minimum: 0 })
   @IsOptional()
   @Type(() => Number)

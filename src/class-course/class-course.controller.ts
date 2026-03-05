@@ -5,6 +5,7 @@ import { CreateClassCourseDto } from './dto/create-class-course.dto';
 import { UpdateClassCourseDto } from './dto/update-class-course.dto';
 import { ClassCourseQueryDto } from './dto/class-course-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateClassCourseBatchDto } from './dto/create-class-course-batch.dto';
 
 @ApiTags('Class Courses')
 @ApiBearerAuth()
@@ -26,6 +27,14 @@ export class ClassCourseController {
   create(@Request() req, @Body() dto: CreateClassCourseDto) {
     const companyId = this.ensureCompany(req);
     return this.classCourseService.create(dto, companyId);
+  }
+
+  @Post('batch')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 201, description: 'Multiple class courses created successfully.' })
+  createBatch(@Request() req, @Body() dto: CreateClassCourseBatchDto) {
+    const companyId = this.ensureCompany(req);
+    return this.classCourseService.createMany(dto.items, companyId);
   }
 
   @Get()
