@@ -1,6 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Company } from '../../company/entities/company.entity';
-import { ClassRoom } from '../../class-rooms/entities/class-room.entity';
 
 @Entity('administrators')
 export class Administrator {
@@ -49,13 +48,6 @@ export class Administrator {
   @ManyToOne(() => Company, company => company.users, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'company_id' })
   company: Company;
-
-  @Column({ nullable: true })
-  class_room_id: number;
-
-  @ManyToOne(() => ClassRoom, { nullable: true })
-  @JoinColumn({ name: 'class_room_id' })
-  classRoom: ClassRoom;
 
   @CreateDateColumn()
   created_at: Date;

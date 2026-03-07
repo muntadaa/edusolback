@@ -579,15 +579,14 @@ export class StudentsService {
       // 2️⃣ Update student status to -2 (soft delete)
       await manager.update(Student, { id }, { status: -2 });
 
-      // 2️⃣.5 Soft delete the corresponding user account (profile = 'student' with same email)
+      // 2️⃣.5 Soft delete the corresponding user account with same email in this company
       await manager
         .createQueryBuilder()
         .update(User)
         .set({ status: -2 })
-        .where('email = :email AND company_id = :companyId AND profile = :profile AND status <> :deletedStatus', {
+        .where('email = :email AND company_id = :companyId AND status <> :deletedStatus', {
           email: student.email,
           companyId: companyId,
-          profile: 'student',
           deletedStatus: -2,
         })
         .execute();

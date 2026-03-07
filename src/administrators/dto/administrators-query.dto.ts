@@ -15,11 +15,6 @@ export class AdministratorsQueryDto extends PaginationDto {
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  class_room_id?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
   @Min(-2)
   @Max(2)
   status?: number;

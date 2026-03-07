@@ -185,6 +185,60 @@ export class StudentsPlanningsService {
     return PaginationService.createResponse(data, page, limit, total);
   }
 
+  async findForPresence(
+    query: StudentsPlanningQueryDto,
+    companyId: number,
+  ): Promise<PaginatedResponseDto<StudentsPlanning>> {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const fourMonthsAgoDate = new Date(now);
+    fourMonthsAgoDate.setMonth(fourMonthsAgoDate.getMonth() - 4);
+    const fourMonthsAgo = fourMonthsAgoDate.toISOString().slice(0, 10);
+    const page = Math.max(1, query.page ?? 1);
+    const order = (query.order ?? 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    const qb = this.repo
+      .createQueryBuilder('plan')
+      .leftJoinAndSelect('plan.teacher', 'teacher')
+      .leftJoinAndSelect('plan.course', 'course')
+      .leftJoinAndSelect('plan.class', 'class')
+      .leftJoinAndSelect('plan.classRoom', 'classRoom')
+      .leftJoinAndSelect('plan.company', 'company')
+      .leftJoinAndSelect('plan.planningSessionType', 'planningSessionType')
+      .leftJoinAndSelect('plan.schoolYear', 'schoolYear')
+      .leftJoinAndSelect('plan.classCourse', 'classCourse');
+
+    qb.andWhere('plan.company_id = :company_id', { company_id: companyId });
+    qb.andWhere('plan.status <> :deletedStatus', { deletedStatus: -2 });
+    qb.andWhere('plan.date_day BETWEEN :from AND :to', {
+      from: fourMonthsAgo,
+      to: today,
+    });
+
+    if (query.status !== undefined) qb.andWhere('plan.status = :status', { status: query.status });
+    if (query.class_id) qb.andWhere('plan.class_id = :class_id', { class_id: query.class_id });
+    if (query.class_room_id) qb.andWhere('plan.class_room_id = :class_room_id', { class_room_id: query.class_room_id });
+    if (query.teacher_id) qb.andWhere('plan.teacher_id = :teacher_id', { teacher_id: query.teacher_id });
+    if (query.course_id) qb.andWhere('plan.course_id = :course_id', { course_id: query.course_id });
+    if (query.planning_session_type_id) {
+      qb.andWhere('plan.planning_session_type_id = :planning_session_type_id', {
+        planning_session_type_id: query.planning_session_type_id,
+      });
+    }
+    if (query.school_year_id) qb.andWhere('plan.school_year_id = :school_year_id', { school_year_id: query.school_year_id });
+    if (query.class_course_id) qb.andWhere('plan.class_course_id = :class_course_id', { class_course_id: query.class_course_id });
+
+    qb.orderBy('plan.date_day', order as 'ASC' | 'DESC').addOrderBy('plan.hour_start', order as 'ASC' | 'DESC');
+
+    if (query.limit !== undefined && query.limit > 0) {
+      qb.skip((page - 1) * query.limit).take(query.limit);
+    }
+
+    const [data, total] = await qb.getManyAndCount();
+    const limit = query.limit ?? total;
+    return PaginationService.createResponse(data, page, limit, total);
+  }
+
   async findOne(id: number, companyId: number): Promise<StudentsPlanning> {
     const found = await this.repo
       .createQueryBuilder('plan')

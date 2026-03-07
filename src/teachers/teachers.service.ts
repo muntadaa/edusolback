@@ -306,15 +306,14 @@ export class TeachersService {
     existing.status = -2;
     await this.teacherRepository.save(existing);
 
-    // Also soft delete the corresponding user account (profile = 'teacher' with same email)
+    // Also soft delete the corresponding user account with same email in this company
     await this.userRepository
       .createQueryBuilder()
       .update(User)
       .set({ status: -2 })
-      .where('email = :email AND company_id = :companyId AND profile = :profile AND status <> :deletedStatus', {
+      .where('email = :email AND company_id = :companyId AND status <> :deletedStatus', {
         email: existing.email,
         companyId: companyId,
-        profile: 'teacher',
         deletedStatus: -2,
       })
       .execute();

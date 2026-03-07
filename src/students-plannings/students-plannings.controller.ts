@@ -35,6 +35,20 @@ export class StudentsPlanningsController {
     return this.studentsPlanningsService.findAll(query, companyId);
   }
 
+  @Get('presence')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 200,
+    description: 'Retrieve planning entries for presence, only from past dates up to today.',
+  })
+  findForPresence(@Request() req, @Query() query: StudentsPlanningQueryDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.studentsPlanningsService.findForPresence(query, companyId);
+  }
+
   @Post(':id/notes/validate')
   @UseGuards(JwtAuthGuard)
   @ApiResponse({ status: 200, description: 'Validate and lock all notes for this session. Only allowed when hasNotes === true.' })

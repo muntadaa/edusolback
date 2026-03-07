@@ -33,8 +33,8 @@ export class AdministratorsService {
   async findAll(query: AdministratorsQueryDto, companyId: number): Promise<PaginatedResponseDto<Administrator>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
-    const qb = this.administratorRepository.createQueryBuilder('a')
-      .leftJoinAndSelect('a.classRoom', 'classRoom')
+    const qb = this.administratorRepository
+      .createQueryBuilder('a')
       .leftJoinAndSelect('a.company', 'company');
 
     qb.andWhere('a.status <> :deletedStatus', { deletedStatus: -2 });
@@ -48,7 +48,6 @@ export class AdministratorsService {
       );
     }
 
-    if (query.class_room_id) qb.andWhere('a.class_room_id = :class_room_id', { class_room_id: query.class_room_id });
     if (query.status !== undefined) qb.andWhere('a.status = :status', { status: query.status });
 
     qb.skip((page - 1) * limit).take(limit).orderBy('a.id', 'DESC');
@@ -60,7 +59,7 @@ export class AdministratorsService {
   async findOne(id: number, companyId: number): Promise<Administrator> {
     const found = await this.administratorRepository.findOne({
       where: { id, company_id: companyId, status: Not(-2) },
-      relations: ['classRoom', 'company'],
+      relations: ['company'],
     });
     if (!found) throw new NotFoundException('Administrator not found');
     return found;
@@ -78,18 +77,6 @@ export class AdministratorsService {
     merged.company_id = companyId;
     merged.company = { id: companyId } as any;
     
-    const relationMappings = {
-      class_room_id: 'classRoom',
-    } as const;
-
-    (Object.entries(relationMappings) as Array<[keyof UpdateAdministratorDto, keyof Administrator]>).forEach(([idProp, relationProp]) => {
-      const value = (updateAdministratorDto as any)[idProp];
-      if (value !== undefined) {
-        (merged as any)[idProp] = value;
-        (merged as any)[relationProp] = value ? ({ id: value } as any) : undefined;
-      }
-    });
-
     await this.administratorRepository.save(merged);
     return this.findOne(id, companyId);
   }

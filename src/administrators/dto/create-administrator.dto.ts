@@ -62,12 +62,6 @@ export class CreateAdministratorDto {
   @IsNumber()
   company_id?: number;
 
-  @ApiPropertyOptional({ description: 'Managed classroom identifier', example: 9 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  class_room_id?: number;
-
   @ApiPropertyOptional({ description: 'Status flag (-2 to 2)', example: 1 })
   @IsOptional()
   @Type(() => Number)
