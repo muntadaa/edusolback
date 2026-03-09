@@ -154,6 +154,11 @@ export class StudentattestationService {
     // Ensure companyid remains from authenticated user
     studentAttestation.companyid = companyId;
     studentAttestation.company = { id: companyId } as any;
+
+    // If a delivery date is set, automatically mark status as active (1)
+    if (studentAttestation.datedelivery) {
+      studentAttestation.Status = 1;
+    }
     const savedStudentAttestation = await this.studentAttestationRepository.save(studentAttestation);
 
     return this.findOne(savedStudentAttestation.id, companyId);
@@ -167,7 +172,7 @@ export class StudentattestationService {
   }
 
   private validateDateRange(dateask: string | null | undefined, datedelivery: string | null | undefined): void {
-    // If both dates are provided, validate that dateask is before datedelivery
+    // If both dates are provided, validate that datedelivery is the same day or after dateask
     if (dateask && datedelivery) {
       const askDate = new Date(dateask);
       const deliveryDate = new Date(datedelivery);
@@ -176,8 +181,8 @@ export class StudentattestationService {
         throw new BadRequestException('Invalid dateask or datedelivery format');
       }
 
-      if (deliveryDate <= askDate) {
-        throw new BadRequestException('datedelivery must be greater than dateask');
+      if (deliveryDate < askDate) {
+        throw new BadRequestException('datedelivery must be greater than or equal to dateask');
       }
     }
   }

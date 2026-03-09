@@ -260,10 +260,43 @@ export class TeachersService {
       // Remove class_room_id if present (no longer supported)
       delete (dtoWithoutCompany as any).class_room_id;
 
+      const emailChanged =
+        dtoWithoutCompany.email !== undefined &&
+        dtoWithoutCompany.email !== null &&
+        dtoWithoutCompany.email !== existing.email;
+
       const merged = this.teacherRepository.merge(existing, dtoWithoutCompany);
       // Ensure company_id remains from authenticated user
       merged.company_id = companyId;
       merged.company = { id: companyId } as any;
+
+      // If email changed, also update the linked User.email (same company)
+      if (emailChanged && dtoWithoutCompany.email) {
+        const currentEmail = existing.email;
+        const newEmail = dtoWithoutCompany.email;
+
+        const user = await this.userRepository.findOne({
+          where: { email: currentEmail, company_id: companyId, status: Not(-2) },
+        });
+
+        if (user) {
+          const conflict = await this.userRepository.findOne({
+            where: {
+              email: newEmail,
+              company_id: companyId,
+              status: Not(-2),
+              id: Not(user.id),
+            },
+          });
+
+          if (conflict) {
+            throw new BadRequestException(`A user with email ${newEmail} already exists`);
+          }
+
+          user.email = newEmail;
+          await this.userRepository.save(user);
+        }
+      }
 
       await this.teacherRepository.save(merged);
       return this.findOne(id, companyId);
