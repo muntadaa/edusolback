@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsNumber, Min, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateLevelDto {
@@ -24,6 +24,28 @@ export class CreateLevelDto {
   @IsNumber()
   @Min(1)
   level?: number;
+
+  @ApiPropertyOptional({ description: 'Duration of this level in months', example: 3 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  durationMonths?: number;
+
+  @ApiPropertyOptional({ description: 'Accreditation date for this level', example: '2026-01-01' })
+  @IsOptional()
+  @IsDateString()
+  accreditationDate?: string;
+
+  @ApiPropertyOptional({ description: 'Accreditation notes or reference text for this level', example: 'Level accredited by Ministry Decree 1234' })
+  @IsOptional()
+  @IsString()
+  accreditationText?: string;
+
+  @ApiPropertyOptional({ description: 'Accreditation document path for this level (PDF or image)', example: '/uploads/accreditations/level-123.pdf' })
+  @IsOptional()
+  @IsString()
+  accreditationDocument?: string;
 
   @ApiPropertyOptional({ description: 'Owning company identifier (automatically set from authenticated user)', example: 4 })
   @IsOptional()

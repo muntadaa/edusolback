@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { ApiBearerAuth, ApiResponse, ApiTags, ApiConsumes } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -21,7 +21,10 @@ export class LevelController {
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Level created successfully.' })
   @UseInterceptors(
-    FileInterceptor('pdf_file', {
+    FileFieldsInterceptor([
+      { name: 'pdf_file', maxCount: 1 },
+      { name: 'accreditationDocument', maxCount: 1 },
+    ], {
       storage: diskStorage({
         destination: (req: any, file, cb) => {
           const companyId = req.user?.company_id;
@@ -48,19 +51,31 @@ export class LevelController {
       limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     }),
   )
-  create(@Request() req, @UploadedFile() file: Express.Multer.File, @Body() dto: CreateLevelDto) {
+  create(
+    @Request() req,
+    @UploadedFiles()
+    files: { pdf_file?: Express.Multer.File[]; accreditationDocument?: Express.Multer.File[] },
+    @Body() dto: CreateLevelDto,
+  ) {
     const companyId = req.user.company_id;
     if (!companyId) {
       throw new BadRequestException('User must belong to a company');
     }
-    if (file) {
-      const relative = path.posix.join('uploads', `${companyId}`, 'levels', path.basename(file.path));
+    const pdfFile = files?.pdf_file?.[0];
+    const accredFile = files?.accreditationDocument?.[0];
+
+    if (pdfFile) {
+      const relative = path.posix.join('uploads', `${companyId}`, 'levels', path.basename(pdfFile.path));
       dto.pdf_file = `/${relative.replace(/\\/g, '/')}`;
     } else {
       const val: any = (dto as any).pdf_file;
       if (typeof val !== 'string' || val === '[object Object]' || val === 'null' || val === 'undefined') {
         delete (dto as any).pdf_file;
       }
+    }
+    if (accredFile) {
+      const relative = path.posix.join('uploads', `${companyId}`, 'levels', path.basename(accredFile.path));
+      (dto as any).accreditationDocument = `/${relative.replace(/\\/g, '/')}`;
     }
     return this.service.create(dto, companyId);
   }
@@ -92,7 +107,10 @@ export class LevelController {
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Update a level.' })
   @UseInterceptors(
-    FileInterceptor('pdf_file', {
+    FileFieldsInterceptor([
+      { name: 'pdf_file', maxCount: 1 },
+      { name: 'accreditationDocument', maxCount: 1 },
+    ], {
       storage: diskStorage({
         destination: (req: any, file, cb) => {
           const companyId = req.user?.company_id;
@@ -119,19 +137,32 @@ export class LevelController {
       limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     }),
   )
-  update(@Request() req, @Param('id') id: string, @UploadedFile() file: Express.Multer.File, @Body() dto: UpdateLevelDto) {
+  update(
+    @Request() req,
+    @Param('id') id: string,
+    @UploadedFiles()
+    files: { pdf_file?: Express.Multer.File[]; accreditationDocument?: Express.Multer.File[] },
+    @Body() dto: UpdateLevelDto,
+  ) {
     const companyId = req.user.company_id;
     if (!companyId) {
       throw new BadRequestException('User must belong to a company');
     }
-    if (file) {
-      const relative = path.posix.join('uploads', `${companyId}`, 'levels', path.basename(file.path));
+    const pdfFile = files?.pdf_file?.[0];
+    const accredFile = files?.accreditationDocument?.[0];
+
+    if (pdfFile) {
+      const relative = path.posix.join('uploads', `${companyId}`, 'levels', path.basename(pdfFile.path));
       dto.pdf_file = `/${relative.replace(/\\/g, '/')}`;
     } else {
       const val: any = (dto as any).pdf_file;
       if (typeof val !== 'string' || val === '[object Object]' || val === 'null' || val === 'undefined') {
         delete (dto as any).pdf_file;
       }
+    }
+    if (accredFile) {
+      const relative = path.posix.join('uploads', `${companyId}`, 'levels', path.basename(accredFile.path));
+      (dto as any).accreditationDocument = `/${relative.replace(/\\/g, '/')}`;
     }
     return this.service.update(+id, dto, companyId);
   }

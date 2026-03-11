@@ -20,6 +20,18 @@ export class Specialization {
   @Column({ type: 'int', default: 1 })
   status: number;
 
+  @Column({ type: 'int', nullable: true, name: 'duration_months' })
+  durationMonths: number | null;
+
+  @Column({ type: 'date', nullable: true, name: 'accreditation_date' })
+  accreditationDate: Date | null;
+
+  @Column({ type: 'text', nullable: true, name: 'accreditation_text' })
+  accreditationText: string | null;
+
+  @Column({ type: 'varchar', nullable: true, name: 'accreditation_document' })
+  accreditationDocument: string | null;
+
   @Column()
   company_id: number;
 

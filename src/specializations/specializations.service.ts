@@ -47,7 +47,10 @@ export class SpecializationsService {
   async findAll(query: SpecializationQueryDto, companyId: number): Promise<PaginatedResponseDto<Specialization>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
-    const qb = this.repo.createQueryBuilder('s').leftJoinAndSelect('s.program', 'p');
+    const qb = this.repo
+      .createQueryBuilder('s')
+      .leftJoinAndSelect('s.program', 'p')
+      .leftJoinAndSelect('s.levels', 'l');
 
     qb.andWhere('s.status <> :deletedStatus', { deletedStatus: -2 });
     // Always filter by company_id from authenticated user
@@ -62,15 +65,32 @@ export class SpecializationsService {
     qb.skip((page - 1) * limit).take(limit).orderBy('s.id', 'DESC');
 
     const [data, total] = await qb.getManyAndCount();
-    return PaginationService.createResponse(data, page, limit, total);
+
+    // Ensure durationMonths is populated using levels when not explicitly set
+    const enriched = data.map(spec => {
+      if (!spec.durationMonths && spec.levels && spec.levels.length > 0) {
+        spec.durationMonths = spec.levels.reduce((sum, level) => {
+          return sum + (level.durationMonths ?? 0);
+        }, 0);
+      }
+      return spec;
+    });
+
+    return PaginationService.createResponse(enriched, page, limit, total);
   }
 
   async findOne(id: number, companyId: number): Promise<Specialization> {
     const found = await this.repo.findOne({
       where: { id, company_id: companyId, status: Not(-2) },
-      relations: ['program'],
+      relations: ['program', 'levels'],
     });
     if (!found) throw new NotFoundException('Specialization not found');
+    // Compute duration from levels if not explicitly set
+    if (!found.durationMonths && found.levels && found.levels.length > 0) {
+      found.durationMonths = found.levels.reduce((sum, level) => {
+        return sum + (level.durationMonths ?? 0);
+      }, 0);
+    }
     return found;
   }
 
@@ -98,6 +118,13 @@ export class SpecializationsService {
     // Ensure company_id remains from authenticated user
     merged.company_id = companyId;
     merged.company = { id: companyId } as any;
+
+    // If duration is not provided explicitly, recompute from levels
+    if (dtoWithoutCompany.durationMonths === undefined && merged.levels && merged.levels.length > 0) {
+      merged.durationMonths = merged.levels.reduce((sum, level) => {
+        return sum + (level.durationMonths ?? 0);
+      }, 0);
+    }
 
     await this.repo.save(merged);
     return this.findOne(id, companyId);

@@ -45,11 +45,17 @@ export class ProgramService {
   }
 
   async findOne(id: number, companyId: number): Promise<Program> {
-    const found = await this.repo.findOne({ 
-      where: { id, company_id: companyId, status: Not(-2) }, 
-      relations: ['specializations'] 
+    const found = await this.repo.findOne({
+      where: { id, company_id: companyId, status: Not(-2) },
+      relations: ['specializations'],
     });
     if (!found) throw new NotFoundException('Program not found');
+    // Compute duration from specializations if not explicitly set
+    if (!found.durationMonths && found.specializations && found.specializations.length > 0) {
+      found.durationMonths = found.specializations.reduce((sum, spec) => {
+        return sum + (spec.durationMonths ?? 0);
+      }, 0);
+    }
     return found;
   }
 
@@ -64,6 +70,13 @@ export class ProgramService {
     // Ensure company_id remains from authenticated user
     merged.company_id = companyId;
     merged.company = { id: companyId } as any;
+    
+    // If duration is not provided explicitly, recompute from specializations
+    if (dtoWithoutCompany.durationMonths === undefined && merged.specializations && merged.specializations.length > 0) {
+      merged.durationMonths = merged.specializations.reduce((sum, spec) => {
+        return sum + (spec.durationMonths ?? 0);
+      }, 0);
+    }
     
     await this.repo.save(merged);
     return this.findOne(id, companyId);

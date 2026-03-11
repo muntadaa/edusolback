@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException, UseInterceptors, UploadedFiles } from '@nestjs/common';
 import { ApiBearerAuth, ApiResponse, ApiTags, ApiConsumes } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -21,7 +21,10 @@ export class SpecializationsController {
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 201, description: 'Specialization created successfully.' })
   @UseInterceptors(
-    FileInterceptor('pdf_file', {
+    FileFieldsInterceptor([
+      { name: 'pdf_file', maxCount: 1 },
+      { name: 'accreditationDocument', maxCount: 1 },
+    ], {
       storage: diskStorage({
         destination: (req: any, file, cb) => {
           const companyId = req.user?.company_id;
@@ -48,13 +51,21 @@ export class SpecializationsController {
       limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     }),
   )
-  create(@Request() req, @UploadedFile() file: Express.Multer.File, @Body() createSpecializationDto: CreateSpecializationDto) {
+  create(
+    @Request() req,
+    @UploadedFiles()
+    files: { pdf_file?: Express.Multer.File[]; accreditationDocument?: Express.Multer.File[] },
+    @Body() createSpecializationDto: CreateSpecializationDto,
+  ) {
     const companyId = req.user.company_id;
     if (!companyId) {
       throw new BadRequestException('User must belong to a company');
     }
-    if (file) {
-      const relative = path.posix.join('uploads', `${companyId}`, 'specializations', path.basename(file.path));
+    const pdfFile = files?.pdf_file?.[0];
+    const accredFile = files?.accreditationDocument?.[0];
+
+    if (pdfFile) {
+      const relative = path.posix.join('uploads', `${companyId}`, 'specializations', path.basename(pdfFile.path));
       createSpecializationDto.pdf_file = `/${relative.replace(/\\/g, '/')}`;
     } else {
       const val: any = (createSpecializationDto as any).pdf_file;
@@ -62,6 +73,12 @@ export class SpecializationsController {
         delete (createSpecializationDto as any).pdf_file;
       }
     }
+
+    if (accredFile) {
+      const relative = path.posix.join('uploads', `${companyId}`, 'specializations', path.basename(accredFile.path));
+      (createSpecializationDto as any).accreditationDocument = `/${relative.replace(/\\/g, '/')}`;
+    }
+
     return this.specializationsService.create(createSpecializationDto, companyId);
   }
 
@@ -92,7 +109,10 @@ export class SpecializationsController {
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Update a specialization.' })
   @UseInterceptors(
-    FileInterceptor('pdf_file', {
+    FileFieldsInterceptor([
+      { name: 'pdf_file', maxCount: 1 },
+      { name: 'accreditationDocument', maxCount: 1 },
+    ], {
       storage: diskStorage({
         destination: (req: any, file, cb) => {
           const companyId = req.user?.company_id;
@@ -119,13 +139,22 @@ export class SpecializationsController {
       limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     }),
   )
-  update(@Request() req, @Param('id') id: string, @UploadedFile() file: Express.Multer.File, @Body() updateSpecializationDto: UpdateSpecializationDto) {
+  update(
+    @Request() req,
+    @Param('id') id: string,
+    @UploadedFiles()
+    files: { pdf_file?: Express.Multer.File[]; accreditationDocument?: Express.Multer.File[] },
+    @Body() updateSpecializationDto: UpdateSpecializationDto,
+  ) {
     const companyId = req.user.company_id;
     if (!companyId) {
       throw new BadRequestException('User must belong to a company');
     }
-    if (file) {
-      const relative = path.posix.join('uploads', `${companyId}`, 'specializations', path.basename(file.path));
+    const pdfFile = files?.pdf_file?.[0];
+    const accredFile = files?.accreditationDocument?.[0];
+
+    if (pdfFile) {
+      const relative = path.posix.join('uploads', `${companyId}`, 'specializations', path.basename(pdfFile.path));
       updateSpecializationDto.pdf_file = `/${relative.replace(/\\/g, '/')}`;
     } else {
       const val: any = (updateSpecializationDto as any).pdf_file;
@@ -133,6 +162,12 @@ export class SpecializationsController {
         delete (updateSpecializationDto as any).pdf_file;
       }
     }
+
+    if (accredFile) {
+      const relative = path.posix.join('uploads', `${companyId}`, 'specializations', path.basename(accredFile.path));
+      (updateSpecializationDto as any).accreditationDocument = `/${relative.replace(/\\/g, '/')}`;
+    }
+
     return this.specializationsService.update(+id, updateSpecializationDto, companyId);
   }
 
