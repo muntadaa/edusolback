@@ -44,6 +44,7 @@ import { AttestationModule } from './attestation/attestation.module';
 import { StudentattestationModule } from './studentattestation/studentattestation.module';
 import { ClassCourseModule } from './class-course/class-course.module';
 import { TeacherCourseModule } from './teacher-course/teacher-course.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -100,6 +101,7 @@ import { TeacherCourseModule } from './teacher-course/teacher-course.module';
     StudentattestationModule,
     ClassCourseModule,
     TeacherCourseModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [

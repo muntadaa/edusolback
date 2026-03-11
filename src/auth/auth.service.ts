@@ -437,6 +437,7 @@ export class AuthService {
         { route: '/settings/company', title: 'Company Settings' },
         { route: '/settings/user', title: 'User Settings' },
         { route: '/settings/pdf-layout', title: 'Settings - PDF Layout' },
+        { route: '/settings/events', title: 'Events' },
       ];
 
       // Find all required pages (global pages)

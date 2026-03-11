@@ -16,6 +16,7 @@ import { Course } from '../course/entities/course.entity';
 import { ClassCourse } from '../class-course/entities/class-course.entity';
 import { DuplicatePlanningDto, DuplicationType } from './dto/duplicate-planning.dto';
 import { StudentPresence } from '../studentpresence/entities/studentpresence.entity';
+import { Event } from '../events/entities/event.entity';
 
 /** Session status: 3 = ACTIVATED (legacy); 1 = ACTIVATED per teacher/controller spec */
 export const SESSION_STATUS_ACTIVATED = 3;
@@ -46,6 +47,8 @@ export class StudentsPlanningsService {
     private readonly classCourseRepo: Repository<ClassCourse>,
     @InjectRepository(StudentPresence)
     private readonly presenceRepo: Repository<StudentPresence>,
+    @InjectRepository(Event)
+    private readonly eventRepo: Repository<Event>,
   ) {}
 
   async create(dto: CreateStudentsPlanningDto, companyId: number): Promise<StudentsPlanning> {
@@ -118,6 +121,9 @@ export class StudentsPlanningsService {
     }
 
     this.ensureValidTimeRange(dto.hour_start, dto.hour_end);
+
+    // Reject if session date falls inside a blocking event
+    await this.ensureNoBlockingEvent(dto.date_day);
     
     // Check for exact duplicates (same date, time, class, teacher, course, classroom)
     await this.checkExactDuplicate(dto, undefined, companyId);
@@ -355,6 +361,9 @@ export class StudentsPlanningsService {
     } as CreateStudentsPlanningDto & { status?: number };
 
     this.ensureValidTimeRange(mergedPayload.hour_start, mergedPayload.hour_end);
+
+    // Reject if new session date falls inside a blocking event
+    await this.ensureNoBlockingEvent(mergedPayload.date_day);
     
     // Check for exact duplicates (excluding current planning)
     await this.checkExactDuplicate(mergedPayload, id, companyId);
@@ -528,6 +537,23 @@ export class StudentsPlanningsService {
     }
     if (start >= end) {
       throw new BadRequestException('End time must be after start time');
+    }
+  }
+
+  /**
+   * Ensures the given date is not inside any blocking event period.
+   * session_date BETWEEN event.start_date AND event.end_date AND event.is_blocking = true → reject.
+   */
+  private async ensureNoBlockingEvent(sessionDate: string): Promise<void> {
+    const blocking = await this.eventRepo
+      .createQueryBuilder('event')
+      .where('event.is_blocking = :blocking', { blocking: true })
+      .andWhere(':date BETWEEN event.start_date AND event.end_date', { date: sessionDate })
+      .getOne();
+    if (blocking) {
+      throw new BadRequestException(
+        'A planning session cannot be created or updated inside a blocking event period.',
+      );
     }
   }
 
@@ -724,17 +750,18 @@ export class StudentsPlanningsService {
               duplication_source_id: sourcePlanning.id,
             };
 
-            // Check for exact duplicates and overlaps before creating
+            // Check blocking event, exact duplicates and overlaps before creating
             try {
+              await this.ensureNoBlockingEvent(planningData.date_day);
               await this.checkExactDuplicate(planningData as any, undefined, companyId);
               await this.ensureNoOverlap(planningData as any, undefined, companyId);
               const created = this.repo.create(planningData);
               const saved = await this.repo.save(created);
               createdPlannings.push(saved);
             } catch (error) {
-              // Skip if duplicate or overlap exists, continue with next
-              if (error instanceof BadRequestException && 
-                  (error.message.includes('overlaps') || error.message.includes('identical planning'))) {
+              // Skip if blocking event, duplicate or overlap exists, continue with next
+              if (error instanceof BadRequestException &&
+                  (error.message.includes('blocking event') || error.message.includes('overlaps') || error.message.includes('identical planning'))) {
                 continue;
               }
               throw error;
@@ -745,7 +772,7 @@ export class StudentsPlanningsService {
 
       case DuplicationType.FREQUENCY:
         const frequency = classCourse.weeklyFrequency || 1;
-        
+        await this.ensureNoBlockingEvent(sourcePlanning.date_day);
         // Create placeholders (same date/time as source, frontend will update)
         for (let i = 0; i < frequency; i++) {
           const planningData = {
@@ -804,8 +831,9 @@ export class StudentsPlanningsService {
               duplication_source_id: sourcePlanning.id,
             };
 
-            // Check for exact duplicates and overlaps before creating
+            // Check blocking event, exact duplicates and overlaps before creating
             try {
+              await this.ensureNoBlockingEvent(planningData.date_day);
               await this.checkExactDuplicate(planningData as any, undefined, companyId);
               await this.ensureNoOverlap(planningData as any, undefined, companyId);
               const created = this.repo.create(planningData);
@@ -813,9 +841,9 @@ export class StudentsPlanningsService {
               createdPlannings.push(saved);
               occurrenceCount++;
             } catch (error) {
-              // Skip if duplicate or overlap exists, continue with next
-              if (error instanceof BadRequestException && 
-                  (error.message.includes('overlaps') || error.message.includes('identical planning'))) {
+              // Skip if blocking event, duplicate or overlap exists, continue with next
+              if (error instanceof BadRequestException &&
+                  (error.message.includes('blocking event') || error.message.includes('overlaps') || error.message.includes('identical planning'))) {
                 currentDate.setDate(currentDate.getDate() + 7); // Skip to next week
                 continue;
               }

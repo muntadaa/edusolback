@@ -38,6 +38,7 @@ export class PagesSeederService implements OnModuleInit {
       { route: '/settings/types/link', title: 'Link Types' },
       { route: '/settings/types/classroom', title: 'Classroom Types' },
       { route: '/settings/types/planning', title: 'Planning Session Types' },
+      { route: '/settings/events', title: 'Events' },
       
       // Main entity pages
       { route: '/administrators', title: 'Administrators' },
