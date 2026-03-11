@@ -49,6 +49,7 @@ export class PagesSeederService implements OnModuleInit {
       { route: '/class-rooms', title: 'Class Rooms' },
       { route: '/class-students', title: 'Class Students' },
       { route: '/class-courses', title: 'Class Courses' },
+      { route: '/programme-course', title: 'Programme Course' },
       
       // Academic management
       { route: '/school-years', title: 'School Years' },
