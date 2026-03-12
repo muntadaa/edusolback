@@ -72,6 +72,9 @@ export class Company {
   @Column({ type: 'boolean', default: true, name: 'papier_entete' })
   papier_entete: boolean;
 
+  @Column({ type: 'varchar', name: 'public_token', length: 64, nullable: true, unique: true })
+  publicToken: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 

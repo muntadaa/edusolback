@@ -97,6 +97,20 @@ export class CompanyController {
     return this.companyService.findOne(+id);
   }
 
+  /**
+   * Public endpoint: fetch minimal company data by publicToken.
+   * Used by the pre-inscription page before any user is authenticated.
+   */
+  @Get('public/:publicToken')
+  @ApiResponse({
+    status: 200,
+    description:
+      'Retrieve public company information (e.g. name, logo, colors) using its publicToken.',
+  })
+  findByPublicToken(@Param('publicToken') publicToken: string) {
+    return this.companyService.findByPublicToken(publicToken);
+  }
+
   @Patch(':id')
   @ApiConsumes('multipart/form-data')
   @ApiResponse({ status: 200, description: 'Update an existing company. Supports logo file upload (JPEG, PNG, GIF, WebP, max 2MB).' })

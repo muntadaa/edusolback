@@ -47,7 +47,7 @@ export class PagesSeederService implements OnModuleInit {
       { route: '/courses', title: 'Courses' },
       { route: '/modules', title: 'Modules' },
       { route: '/classes', title: 'Classes' },
-      { route: '/class-rooms', title: 'Class Rooms' },
+      { route: '/settings/types/class-rooms', title: 'Class Rooms' },
       { route: '/class-students', title: 'Class Students' },
       { route: '/class-courses', title: 'Class Courses' },
       { route: '/programme-course', title: 'Programme Course' },
@@ -75,6 +75,7 @@ export class PagesSeederService implements OnModuleInit {
       { route: '/student-contacts', title: 'Student Contacts' },
       { route: '/student-link-types', title: 'Student Link Types' },
       { route: '/student-notes', title: 'Student Notes' },
+      { route: '/preinscriptions', title: 'Pre-inscriptions' },
     ];
 
     // Optimized: Get all existing pages in one query

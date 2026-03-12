@@ -8,6 +8,7 @@ import { CompanyQueryDto } from './dto/company-query.dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
 import { CaptchaService } from '../captcha/captcha.service';
+import { randomBytes } from 'crypto';
 
 @Injectable()
 export class CompanyService {
@@ -16,6 +17,21 @@ export class CompanyService {
     private companyRepository: Repository<Company>,
     private captchaService: CaptchaService,
   ) {}
+
+  private async generateUniquePublicToken(): Promise<string> {
+    // Generate a random token and ensure it's unique among companies
+    // Length 32 hex chars is enough; can be adjusted if needed
+    let token: string;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      token = randomBytes(16).toString('hex');
+      const existing = await this.companyRepository.findOne({
+        where: { publicToken: token },
+      });
+      if (!existing) break;
+    }
+    return token;
+  }
 
   async create(createCompanyDto: CreateCompanyDto): Promise<Company> {
     // Verify CAPTCHA using pre-verified flow
@@ -42,8 +58,10 @@ export class CompanyService {
 
     // Remove CAPTCHA fields before creating company
     const { captchaToken, captchaAnswer, ...companyData } = createCompanyDto;
-    
+
     const company = this.companyRepository.create(companyData);
+    // Generate a publicToken on creation so it can be used for public pre-inscriptions
+    company.publicToken = await this.generateUniquePublicToken();
     return await this.companyRepository.save(company);
   }
 
@@ -78,6 +96,16 @@ export class CompanyService {
       throw new NotFoundException(`Company with ID ${id} not found`);
     }
     
+    return company;
+  }
+
+  async findByPublicToken(publicToken: string): Promise<Company> {
+    const company = await this.companyRepository.findOne({
+      where: { publicToken, status: Not(-2) },
+    });
+    if (!company) {
+      throw new NotFoundException('Company not found for the provided public token');
+    }
     return company;
   }
 
