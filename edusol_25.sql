@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Hôte : 127.0.0.1
--- Généré le : lun. 02 mars 2026 à 16:35
+-- Généré le : sam. 14 mars 2026 à 13:38
 -- Version du serveur : 10.4.32-MariaDB
 -- Version de PHP : 8.2.12
 
@@ -42,7 +42,6 @@ CREATE TABLE `administrators` (
   `picture` varchar(255) DEFAULT NULL,
   `statut` int(11) DEFAULT 1,
   `company_id` int(11) NOT NULL,
-  `class_room_id` int(11) DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -71,7 +70,7 @@ CREATE TABLE `attestations` (
 
 CREATE TABLE `classes` (
   `id` int(11) NOT NULL,
-  `title` varchar(255) NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
   `description` longtext DEFAULT NULL,
   `statut` int(11) DEFAULT 1,
   `company_id` int(11) NOT NULL,
@@ -82,6 +81,28 @@ CREATE TABLE `classes` (
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `classes`
+--
+
+INSERT INTO `classes` (`id`, `title`, `description`, `statut`, `company_id`, `program_id`, `specialization_id`, `level_id`, `school_year_id`, `created_at`, `updated_at`) VALUES
+(1, 'clas 1', '<p>test</p>', 1, 3, 2, 2, 6, 1, '2026-03-11 22:42:41.680112', '2026-03-11 22:42:41.680112'),
+(7, '', NULL, 1, 3, 2, 2, 6, 1, '2026-03-13 11:49:43.198034', '2026-03-13 11:49:43.198034'),
+(8, '', NULL, 1, 3, 2, 2, 5, 1, '2026-03-13 11:49:43.214022', '2026-03-13 11:49:43.214022'),
+(9, '', NULL, 1, 3, 2, 1, 9, 1, '2026-03-13 11:49:43.221881', '2026-03-13 11:49:43.221881'),
+(10, '', NULL, 1, 3, 2, 1, 8, 1, '2026-03-13 11:49:43.230645', '2026-03-13 11:49:43.230645'),
+(11, '', NULL, 1, 3, 2, 1, 7, 1, '2026-03-13 11:49:43.237708', '2026-03-13 11:49:43.237708'),
+(12, '', NULL, 1, 3, 2, 2, 6, 1, '2026-03-13 11:49:53.370681', '2026-03-13 11:49:53.370681'),
+(13, '', NULL, 1, 3, 2, 2, 5, 1, '2026-03-13 11:49:53.384685', '2026-03-13 11:49:53.384685'),
+(14, '', NULL, 1, 3, 2, 1, 9, 1, '2026-03-13 11:49:53.394480', '2026-03-13 11:49:53.394480'),
+(15, '', NULL, 1, 3, 2, 1, 8, 1, '2026-03-13 11:49:53.403531', '2026-03-13 11:49:53.403531'),
+(16, '', NULL, 1, 3, 2, 1, 7, 1, '2026-03-13 11:49:53.410075', '2026-03-13 11:49:53.410075'),
+(17, '', NULL, 1, 3, 1, 4, 2, 1, '2026-03-13 12:25:37.334021', '2026-03-13 12:25:37.334021'),
+(18, '', NULL, 1, 3, 1, 4, 1, 1, '2026-03-13 12:25:37.345346', '2026-03-13 12:25:37.345346'),
+(19, '', NULL, 1, 3, 2, 2, 5, 1, '2026-03-13 12:25:37.353720', '2026-03-13 12:25:37.353720'),
+(20, '', NULL, 1, 3, 2, 2, 6, 2, '2026-03-13 12:25:49.795264', '2026-03-13 12:25:49.795264'),
+(21, '', NULL, 1, 3, 2, 2, 5, 2, '2026-03-13 12:25:49.811458', '2026-03-13 12:25:49.811458');
 
 -- --------------------------------------------------------
 
@@ -97,6 +118,13 @@ CREATE TABLE `classroom_types` (
   `statut` int(11) DEFAULT 1,
   `company_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `classroom_types`
+--
+
+INSERT INTO `classroom_types` (`id`, `title`, `created_at`, `updated_at`, `statut`, `company_id`) VALUES
+(1, 'amphi', '2026-03-11 21:26:21.150006', '2026-03-11 21:26:21.150006', 1, 3);
 
 -- --------------------------------------------------------
 
@@ -117,8 +145,23 @@ CREATE TABLE `class_courses` (
   `allday` tinyint(4) NOT NULL DEFAULT 0,
   `duration` int(11) DEFAULT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
+  `module_coefficient` int(11) DEFAULT NULL,
+  `course_coefficient` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `class_courses`
+--
+
+INSERT INTO `class_courses` (`id`, `description`, `status`, `company_id`, `level_id`, `module_id`, `course_id`, `volume`, `weekly_frequency`, `allday`, `duration`, `created_at`, `updated_at`, `module_coefficient`, `course_coefficient`) VALUES
+(1, '<p>test</p>', 2, 3, 2, 2, 2, 20, 1, 0, NULL, '2026-03-10 21:28:00.716783', '2026-03-11 00:00:22.000000', 4, 3),
+(2, '<p>test</p>', 2, 3, 2, 2, 1, 20, 1, 0, NULL, '2026-03-10 21:28:00.788531', '2026-03-11 00:00:21.000000', 4, 2),
+(12, NULL, 2, 3, 2, 3, 1, NULL, 1, 0, NULL, '2026-03-10 23:30:34.064316', '2026-03-10 23:30:49.000000', 4, 2),
+(13, NULL, 2, 3, 2, 3, 2, NULL, 1, 0, NULL, '2026-03-10 23:30:34.101222', '2026-03-10 23:30:49.000000', 4, 3),
+(14, NULL, 2, 3, 2, 3, 3, 12, 1, 0, NULL, '2026-03-10 23:30:34.140114', '2026-03-10 23:30:56.000000', 4, 3),
+(15, NULL, 2, 3, 6, 2, 1, NULL, 1, 0, NULL, '2026-03-10 23:31:18.465407', '2026-03-11 00:00:21.000000', 4, 2),
+(16, NULL, 2, 3, 6, 1, 3, NULL, 1, 0, NULL, '2026-03-10 23:31:18.495516', '2026-03-11 00:00:13.000000', 5, 3);
 
 -- --------------------------------------------------------
 
@@ -137,6 +180,13 @@ CREATE TABLE `class_rooms` (
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `class_rooms`
+--
+
+INSERT INTO `class_rooms` (`id`, `code`, `title`, `classroom_type_id`, `capacity`, `company_id`, `statut`, `created_at`, `updated_at`) VALUES
+(1, '26C630A3', 'class 1', 1, 30, 3, 1, '2026-03-11 21:26:41.137554', '2026-03-11 21:26:41.137554');
 
 -- --------------------------------------------------------
 
@@ -185,15 +235,16 @@ CREATE TABLE `companies` (
   `pied_3` text DEFAULT NULL,
   `logo_left` tinyint(4) NOT NULL DEFAULT 1,
   `logo_right` tinyint(4) NOT NULL DEFAULT 0,
-  `papier_entete` tinyint(4) NOT NULL DEFAULT 1
+  `papier_entete` tinyint(4) NOT NULL DEFAULT 1,
+  `public_token` varchar(64) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Déchargement des données de la table `companies`
 --
 
-INSERT INTO `companies` (`id`, `name`, `logo`, `email`, `phone`, `city`, `country`, `address`, `codePostal`, `primary_color`, `secondary_color`, `tertiary_color`, `statut`, `created_at`, `updated_at`, `entete_1`, `entete_2`, `entete_3`, `pied_1`, `pied_2`, `pied_3`, `logo_left`, `logo_right`, `papier_entete`) VALUES
-(1, 'Test', '/uploads/1/company/1772452768150_logo-removebg-preview.png', 'walidbirori@gmail.com', '+212655996022', 'Safi', 'Morocco', '40 RUE ELOUALIDIA LOTIS EL MAJD QU OUED EL BACHA SAFI', '45000', NULL, NULL, NULL, 1, '2026-03-02 11:54:48.061110', '2026-03-02 13:28:23.000000', '<p>header 112</p>', '<p>header 2</p>', '<p>header 3</p>', '<p>footer 1</p>', '<p>footer 2</p>', '<p>footer 3</p>', 1, 1, 1);
+INSERT INTO `companies` (`id`, `name`, `logo`, `email`, `phone`, `city`, `country`, `address`, `codePostal`, `primary_color`, `secondary_color`, `tertiary_color`, `statut`, `created_at`, `updated_at`, `entete_1`, `entete_2`, `entete_3`, `pied_1`, `pied_2`, `pied_3`, `logo_left`, `logo_right`, `papier_entete`, `public_token`) VALUES
+(3, 'School 1', '/uploads/3/company/1773139279437_logo-removebg-preview.png', 'oualidagourd@gmail.com', '+212655996022', 'Safi', 'Morocco', '40 RUE ELOUALIDIA LOTIS EL MAJD QU OUED EL BACHA', '45000', NULL, NULL, NULL, 1, '2026-03-10 10:09:31.965401', '2026-03-12 15:13:12.420903', 'Entêtes 11', 'Entêtes 22', 'Entêtes 3', 'Pieds 1', 'Pieds 2', 'Pieds 3', 1, 0, 1, 'abc123xyz');
 
 -- --------------------------------------------------------
 
@@ -214,6 +265,45 @@ CREATE TABLE `courses` (
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Déchargement des données de la table `courses`
+--
+
+INSERT INTO `courses` (`id`, `intitule`, `description`, `volume`, `coefficient`, `pdf_file`, `statut`, `company_id`, `created_at`, `updated_at`) VALUES
+(1, 'C1', NULL, 5, 2, NULL, 1, 3, '2026-03-10 12:49:40.063914', '2026-03-10 12:49:54.000000'),
+(2, 'C2', NULL, 2, 3, NULL, 1, 3, '2026-03-10 12:49:46.517329', '2026-03-10 12:49:46.517329'),
+(3, 'C3', NULL, 10, 3, NULL, 1, 3, '2026-03-10 12:50:02.152398', '2026-03-10 12:50:02.152398'),
+(4, 'C4', NULL, 23, 4, NULL, 1, 3, '2026-03-10 12:50:07.944337', '2026-03-10 12:50:07.944337');
+
+-- --------------------------------------------------------
+
+--
+-- Structure de la table `events`
+--
+
+CREATE TABLE `events` (
+  `id` int(11) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text DEFAULT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `type` enum('holiday','exam','event','closure') NOT NULL,
+  `is_blocking` tinyint(4) NOT NULL DEFAULT 1,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `events`
+--
+
+INSERT INTO `events` (`id`, `title`, `description`, `start_date`, `end_date`, `type`, `is_blocking`, `created_at`, `updated_at`) VALUES
+(1, 'aaaaa', 'test', '2026-03-11', '2026-03-18', 'holiday', 1, '2026-03-11 22:40:00.905470', '2026-03-11 22:40:00.905470'),
+(2, 'journee de l\'independance', NULL, '2025-11-18', '2025-11-18', 'event', 1, '2026-03-11 23:21:23.274829', '2026-03-11 23:21:23.274829'),
+(3, 'tesd', 'zdz', '2026-03-02', '2026-03-05', 'event', 1, '2026-03-11 23:28:27.488601', '2026-03-11 23:28:27.488601'),
+(4, 'fs', NULL, '2026-01-07', '2026-01-28', 'event', 1, '2026-03-11 23:28:40.856676', '2026-03-11 23:28:40.856676'),
+(5, 'Entêtes 3', NULL, '2026-03-12', '2026-03-19', 'event', 1, '2026-03-12 05:50:37.526103', '2026-03-12 05:50:37.526103');
+
 -- --------------------------------------------------------
 
 --
@@ -230,8 +320,27 @@ CREATE TABLE `levels` (
   `company_id` int(11) NOT NULL,
   `specialization_id` int(11) NOT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
+  `duration_months` int(11) DEFAULT NULL,
+  `accreditation_date` date DEFAULT NULL,
+  `accreditation_text` text DEFAULT NULL,
+  `accreditation_document` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `levels`
+--
+
+INSERT INTO `levels` (`id`, `title`, `description`, `pdf_file`, `level`, `status`, `company_id`, `specialization_id`, `created_at`, `updated_at`, `duration_months`, `accreditation_date`, `accreditation_text`, `accreditation_document`) VALUES
+(1, 'P1 S2 N1', NULL, NULL, 1, 1, 3, 4, '2026-03-10 11:49:00.311094', '2026-03-10 11:49:00.311094', NULL, NULL, NULL, NULL),
+(2, 'P1 S2 N2', NULL, NULL, 1, 1, 3, 4, '2026-03-10 11:49:06.427758', '2026-03-10 11:49:06.427758', NULL, NULL, NULL, NULL),
+(3, 'P1 S1 N1', NULL, NULL, 1, 1, 3, 3, '2026-03-10 11:49:17.092211', '2026-03-10 11:49:17.092211', NULL, NULL, NULL, NULL),
+(4, 'P1 S1 N2', NULL, NULL, 1, 1, 3, 3, '2026-03-10 11:49:23.480463', '2026-03-11 15:44:47.000000', 6, NULL, NULL, NULL),
+(5, 'P2 S2 N1', NULL, NULL, 1, 1, 3, 2, '2026-03-10 11:49:34.836009', '2026-03-11 15:34:56.000000', 10, NULL, NULL, NULL),
+(6, 'P2 S2 N2', NULL, NULL, 1, 1, 3, 2, '2026-03-10 11:49:42.336281', '2026-03-11 17:10:23.000000', 8, NULL, NULL, NULL),
+(7, 'P2 S1 N1', NULL, NULL, 1, 1, 3, 1, '2026-03-10 11:49:51.991313', '2026-03-10 11:49:51.991313', NULL, NULL, NULL, NULL),
+(8, 'P2 S1 N2', NULL, NULL, 1, 1, 3, 1, '2026-03-10 11:49:58.277473', '2026-03-11 15:49:20.000000', 4, NULL, NULL, NULL),
+(9, 'P2 S1 N3', NULL, NULL, 1, 1, 3, 1, '2026-03-11 15:39:51.492236', '2026-03-11 15:39:51.492236', 13, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -271,6 +380,15 @@ CREATE TABLE `modules` (
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Déchargement des données de la table `modules`
+--
+
+INSERT INTO `modules` (`id`, `intitule`, `description`, `volume`, `coefficient`, `pdf_file`, `statut`, `company_id`, `created_at`, `updated_at`) VALUES
+(1, 'M1', NULL, 33, 4, NULL, 1, 3, '2026-03-10 12:49:16.859541', '2026-03-10 12:50:44.000000'),
+(2, 'M2', NULL, 7, 3, NULL, 1, 3, '2026-03-10 12:49:25.991560', '2026-03-10 12:50:34.000000'),
+(3, 'M3', NULL, 40, 3, NULL, 1, 3, '2026-03-10 12:50:59.207005', '2026-03-10 12:51:05.000000');
+
 -- --------------------------------------------------------
 
 --
@@ -287,6 +405,20 @@ CREATE TABLE `module_course` (
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `module_course`
+--
+
+INSERT INTO `module_course` (`module_id`, `course_id`, `tri`, `volume`, `coefficient`, `status`, `created_at`, `updated_at`) VALUES
+(1, 3, 0, NULL, NULL, 1, '2026-03-13 11:49:47.367964', '2026-03-13 11:49:47.371111'),
+(1, 4, 0, NULL, NULL, 1, '2026-03-13 11:49:47.367964', '2026-03-13 11:49:47.371111'),
+(2, 1, 0, NULL, NULL, 1, '2026-03-13 11:49:47.367964', '2026-03-13 11:49:47.371111'),
+(2, 2, 0, NULL, NULL, 1, '2026-03-13 11:49:47.367964', '2026-03-13 11:49:47.371111'),
+(3, 1, 0, NULL, NULL, 1, '2026-03-13 11:49:47.367964', '2026-03-13 11:49:47.371111'),
+(3, 2, 0, NULL, NULL, 1, '2026-03-13 11:49:47.367964', '2026-03-13 11:49:47.371111'),
+(3, 3, 0, NULL, NULL, 1, '2026-03-13 11:49:47.367964', '2026-03-13 11:49:47.371111'),
+(3, 4, 0, NULL, NULL, 1, '2026-03-13 11:49:47.367964', '2026-03-13 11:49:47.371111');
 
 -- --------------------------------------------------------
 
@@ -307,62 +439,66 @@ CREATE TABLE `pages` (
 --
 
 INSERT INTO `pages` (`id`, `title`, `route`, `created_at`, `updated_at`) VALUES
-(1, 'Dashboard', '/dashboard', '2026-03-02 11:53:58.299510', '2026-03-02 11:53:58.299510'),
-(2, 'Users', '/users', '2026-03-02 11:53:58.303153', '2026-03-02 11:53:58.303153'),
-(3, 'Companies', '/companies', '2026-03-02 11:53:58.306399', '2026-03-02 11:53:58.306399'),
-(4, 'Settings', '/settings', '2026-03-02 11:53:58.308734', '2026-03-02 11:53:58.308734'),
-(5, 'Page Access Management', '/settings/access', '2026-03-02 11:53:58.310286', '2026-03-02 11:53:58.310286'),
-(6, 'Roles Management', '/settings/roles', '2026-03-02 11:53:58.311371', '2026-03-02 11:53:58.311371'),
-(7, 'Color Settings', '/settings/colors', '2026-03-02 11:53:58.312373', '2026-03-02 11:53:58.312373'),
-(8, 'Company Settings', '/settings/company', '2026-03-02 11:53:58.313489', '2026-03-02 11:53:58.313489'),
-(9, 'User Settings', '/settings/user', '2026-03-02 11:53:58.314903', '2026-03-02 11:53:58.314903'),
-(10, 'Types Settings', '/settings/types', '2026-03-02 11:53:58.315983', '2026-03-02 11:53:58.315983'),
-(11, 'Link Types', '/settings/types/link', '2026-03-02 11:53:58.316915', '2026-03-02 11:53:58.316915'),
-(12, 'Classroom Types', '/settings/types/classroom', '2026-03-02 11:53:58.317849', '2026-03-02 11:53:58.317849'),
-(13, 'Planning Session Types', '/settings/types/planning', '2026-03-02 11:53:58.318668', '2026-03-02 11:53:58.318668'),
-(14, 'Administrators', '/administrators', '2026-03-02 11:53:58.319380', '2026-03-02 11:53:58.319380'),
-(15, 'Students', '/students', '2026-03-02 11:53:58.320227', '2026-03-02 11:53:58.320227'),
-(16, 'Teachers', '/teachers', '2026-03-02 11:53:58.321270', '2026-03-02 11:53:58.321270'),
-(17, 'Courses', '/courses', '2026-03-02 11:53:58.322331', '2026-03-02 11:53:58.322331'),
-(18, 'Modules', '/modules', '2026-03-02 11:53:58.323078', '2026-03-02 11:53:58.323078'),
-(19, 'Classes', '/classes', '2026-03-02 11:53:58.323810', '2026-03-02 11:53:58.323810'),
-(20, 'Class Rooms', '/class-rooms', '2026-03-02 11:53:58.324884', '2026-03-02 11:53:58.324884'),
-(21, 'Class Students', '/class-students', '2026-03-02 11:53:58.325826', '2026-03-02 11:53:58.325826'),
-(22, 'Class Courses', '/class-courses', '2026-03-02 11:53:58.326525', '2026-03-02 11:53:58.326525'),
-(23, 'School Years', '/school-years', '2026-03-02 11:53:58.327376', '2026-03-02 11:53:58.327376'),
-(24, 'School Year Periods', '/school-year-periods', '2026-03-02 11:53:58.328092', '2026-03-02 11:53:58.328092'),
-(25, 'Programs', '/programs', '2026-03-02 11:53:58.328730', '2026-03-02 11:53:58.328730'),
-(26, 'Levels', '/levels', '2026-03-02 11:53:58.329346', '2026-03-02 11:53:58.329346'),
-(27, 'Specializations', '/specializations', '2026-03-02 11:53:58.329965', '2026-03-02 11:53:58.329965'),
-(28, 'Planning', '/planning', '2026-03-02 11:53:58.330591', '2026-03-02 11:53:58.330591'),
-(29, 'Planning Session Types', '/planning-session-types', '2026-03-02 11:53:58.331334', '2026-03-02 11:53:58.331334'),
-(30, 'Student Presence', '/student-presence', '2026-03-02 11:53:58.332061', '2026-03-02 11:53:58.332061'),
-(31, 'Student Reports', '/student-reports', '2026-03-02 11:53:58.332697', '2026-03-02 11:53:58.332697'),
-(32, 'Student Report Details', '/student-report-details', '2026-03-02 11:53:58.333307', '2026-03-02 11:53:58.333307'),
-(33, 'Student Payments', '/student-payments', '2026-03-02 11:53:58.333921', '2026-03-02 11:53:58.333921'),
-(34, 'Level Pricings', '/level-pricings', '2026-03-02 11:53:58.334606', '2026-03-02 11:53:58.334606'),
-(35, 'Student Attestations', '/student-attestations', '2026-03-02 11:53:58.335229', '2026-03-02 11:53:58.335229'),
-(36, 'Attestations', '/attestations', '2026-03-02 11:53:58.335843', '2026-03-02 11:53:58.335843'),
-(37, 'Student Diplomes', '/student-diplomes', '2026-03-02 11:53:58.336443', '2026-03-02 11:53:58.336443'),
-(38, 'Student Contacts', '/student-contacts', '2026-03-02 11:53:58.337200', '2026-03-02 11:53:58.337200'),
-(39, 'Student Link Types', '/student-link-types', '2026-03-02 11:53:58.337962', '2026-03-02 11:53:58.337962'),
-(40, 'Student Notes', '/student-notes', '2026-03-02 11:53:58.338607', '2026-03-02 11:53:58.338607'),
-(41, 'Settings - PDF Layout', '/settings/pdf-layout', '2026-03-02 11:54:48.084525', '2026-03-02 11:54:48.084525'),
-(42, 'Roles', '/roles', '2026-03-02 11:55:31.002248', '2026-03-02 11:55:31.002248'),
-(43, 'Profile', '/profile', '2026-03-02 11:55:31.005026', '2026-03-02 11:55:31.005026'),
-(44, 'Student Dashboard', '/student', '2026-03-02 11:55:31.007687', '2026-03-02 11:55:31.007687'),
-(45, 'Student Schedule', '/student/schedule', '2026-03-02 11:55:31.010558', '2026-03-02 11:55:31.010558'),
-(46, 'Student Grades', '/student/grades', '2026-03-02 11:55:31.013703', '2026-03-02 11:55:31.013703'),
-(47, 'Student Attendance', '/student/attendance', '2026-03-02 11:55:31.018564', '2026-03-02 11:55:31.018564'),
-(48, 'Student Attestations', '/student/attestations', '2026-03-02 11:55:31.021991', '2026-03-02 11:55:31.021991'),
-(49, 'Student Profile', '/student/profile', '2026-03-02 11:55:31.024648', '2026-03-02 11:55:31.024648'),
-(50, 'Teacher Dashboard', '/teacher', '2026-03-02 11:55:31.026764', '2026-03-02 11:55:31.026764'),
-(51, 'Teacher Plannings', '/teacher/plannings', '2026-03-02 11:55:31.028910', '2026-03-02 11:55:31.028910'),
-(52, 'Teacher Attendance', '/teacher/attendance', '2026-03-02 11:55:31.031700', '2026-03-02 11:55:31.031700'),
-(53, 'Teacher Grades', '/teacher/grades', '2026-03-02 11:55:31.034980', '2026-03-02 11:55:31.034980'),
-(54, 'Teacher Links', '/teacher/links', '2026-03-02 11:55:31.038311', '2026-03-02 11:55:31.038311'),
-(55, 'Teacher Profile', '/teacher/profile', '2026-03-02 11:55:31.041081', '2026-03-02 11:55:31.041081'),
-(56, 'Teacher Homework', '/teacher/homework', '2026-03-02 11:55:31.044352', '2026-03-02 11:55:31.044352');
+(1, 'Dashboard', '/dashboard', '2026-03-10 10:08:30.057996', '2026-03-10 10:08:30.057996'),
+(2, 'Users', '/users', '2026-03-10 10:08:30.061968', '2026-03-10 10:08:30.061968'),
+(3, 'Companies', '/companies', '2026-03-10 10:08:30.065020', '2026-03-10 10:08:30.065020'),
+(4, 'Settings', '/settings', '2026-03-10 10:08:30.066745', '2026-03-10 10:08:30.066745'),
+(5, 'Page Access Management', '/settings/access', '2026-03-10 10:08:30.067899', '2026-03-10 10:08:30.067899'),
+(6, 'Roles Management', '/settings/roles', '2026-03-10 10:08:30.068957', '2026-03-10 10:08:30.068957'),
+(7, 'Color Settings', '/settings/colors', '2026-03-10 10:08:30.069937', '2026-03-10 10:08:30.069937'),
+(8, 'Company Settings', '/settings/company', '2026-03-10 10:08:30.071068', '2026-03-10 10:08:30.071068'),
+(9, 'User Settings', '/settings/user', '2026-03-10 10:08:30.072258', '2026-03-10 10:08:30.072258'),
+(10, 'Types Settings', '/settings/types', '2026-03-10 10:08:30.073694', '2026-03-10 10:08:30.073694'),
+(11, 'Link Types', '/settings/types/link', '2026-03-10 10:08:30.074814', '2026-03-10 10:08:30.074814'),
+(12, 'Classroom Types', '/settings/types/classroom', '2026-03-10 10:08:30.075951', '2026-03-10 10:08:30.075951'),
+(13, 'Planning Session Types', '/settings/types/planning', '2026-03-10 10:08:30.076940', '2026-03-10 10:08:30.076940'),
+(14, 'Administrators', '/administrators', '2026-03-10 10:08:30.077902', '2026-03-10 10:08:30.077902'),
+(15, 'Students', '/students', '2026-03-10 10:08:30.078888', '2026-03-10 10:08:30.078888'),
+(16, 'Teachers', '/teachers', '2026-03-10 10:08:30.080341', '2026-03-10 10:08:30.080341'),
+(17, 'Courses', '/courses', '2026-03-10 10:08:30.081549', '2026-03-10 10:08:30.081549'),
+(18, 'Modules', '/modules', '2026-03-10 10:08:30.082484', '2026-03-10 10:08:30.082484'),
+(19, 'Classes', '/classes', '2026-03-10 10:08:30.083348', '2026-03-10 10:08:30.083348'),
+(20, 'Class Rooms', '/class-rooms', '2026-03-10 10:08:30.084177', '2026-03-10 10:08:30.084177'),
+(21, 'Class Students', '/class-students', '2026-03-10 10:08:30.085129', '2026-03-10 10:08:30.085129'),
+(22, 'Class Courses', '/class-courses', '2026-03-10 10:08:30.086116', '2026-03-10 10:08:30.086116'),
+(23, 'School Years', '/school-years', '2026-03-10 10:08:30.087076', '2026-03-10 10:08:30.087076'),
+(24, 'School Year Periods', '/school-year-periods', '2026-03-10 10:08:30.087956', '2026-03-10 10:08:30.087956'),
+(25, 'Programs', '/programs', '2026-03-10 10:08:30.088733', '2026-03-10 10:08:30.088733'),
+(26, 'Levels', '/levels', '2026-03-10 10:08:30.089554', '2026-03-10 10:08:30.089554'),
+(27, 'Specializations', '/specializations', '2026-03-10 10:08:30.090344', '2026-03-10 10:08:30.090344'),
+(28, 'Planning', '/planning', '2026-03-10 10:08:30.091134', '2026-03-10 10:08:30.091134'),
+(29, 'Planning Session Types', '/planning-session-types', '2026-03-10 10:08:30.092047', '2026-03-10 10:08:30.092047'),
+(30, 'Student Presence', '/student-presence', '2026-03-10 10:08:30.092989', '2026-03-10 10:08:30.092989'),
+(31, 'Student Reports', '/student-reports', '2026-03-10 10:08:30.093889', '2026-03-10 10:08:30.093889'),
+(32, 'Student Report Details', '/student-report-details', '2026-03-10 10:08:30.094930', '2026-03-10 10:08:30.094930'),
+(33, 'Student Payments', '/student-payments', '2026-03-10 10:08:30.095970', '2026-03-10 10:08:30.095970'),
+(34, 'Level Pricings', '/level-pricings', '2026-03-10 10:08:30.097089', '2026-03-10 10:08:30.097089'),
+(35, 'Student Attestations', '/student-attestations', '2026-03-10 10:08:30.097855', '2026-03-10 10:08:30.097855'),
+(36, 'Attestations', '/attestations', '2026-03-10 10:08:30.098609', '2026-03-10 10:08:30.098609'),
+(37, 'Student Diplomes', '/student-diplomes', '2026-03-10 10:08:30.099339', '2026-03-10 10:08:30.099339'),
+(38, 'Student Contacts', '/student-contacts', '2026-03-10 10:08:30.099998', '2026-03-10 10:08:30.099998'),
+(39, 'Student Link Types', '/student-link-types', '2026-03-10 10:08:30.100776', '2026-03-10 10:08:30.100776'),
+(40, 'Student Notes', '/student-notes', '2026-03-10 10:08:30.101561', '2026-03-10 10:08:30.101561'),
+(41, 'Settings - PDF Layout', '/settings/pdf-layout', '2026-03-10 10:09:32.005811', '2026-03-10 10:09:32.005811'),
+(42, 'Roles', '/roles', '2026-03-10 10:10:19.414543', '2026-03-10 10:10:19.414543'),
+(43, 'Profile', '/profile', '2026-03-10 10:10:19.418349', '2026-03-10 10:10:19.418349'),
+(44, 'Student Dashboard', '/student', '2026-03-10 10:10:19.422181', '2026-03-10 10:10:19.422181'),
+(45, 'Student Schedule', '/student/schedule', '2026-03-10 10:10:19.426598', '2026-03-10 10:10:19.426598'),
+(46, 'Student Grades', '/student/grades', '2026-03-10 10:10:19.430367', '2026-03-10 10:10:19.430367'),
+(47, 'Student Attendance', '/student/attendance', '2026-03-10 10:10:19.436592', '2026-03-10 10:10:19.436592'),
+(48, 'Student Attestations', '/student/attestations', '2026-03-10 10:10:19.440747', '2026-03-10 10:10:19.440747'),
+(49, 'Student Profile', '/student/profile', '2026-03-10 10:10:19.443684', '2026-03-10 10:10:19.443684'),
+(50, 'Teacher Dashboard', '/teacher', '2026-03-10 10:10:19.446328', '2026-03-10 10:10:19.446328'),
+(51, 'Teacher Plannings', '/teacher/plannings', '2026-03-10 10:10:19.449472', '2026-03-10 10:10:19.449472'),
+(52, 'Teacher Attendance', '/teacher/attendance', '2026-03-10 10:10:19.452164', '2026-03-10 10:10:19.452164'),
+(53, 'Teacher Grades', '/teacher/grades', '2026-03-10 10:10:19.455608', '2026-03-10 10:10:19.455608'),
+(54, 'Teacher Links', '/teacher/links', '2026-03-10 10:10:19.459193', '2026-03-10 10:10:19.459193'),
+(55, 'Teacher Profile', '/teacher/profile', '2026-03-10 10:10:19.462251', '2026-03-10 10:10:19.462251'),
+(56, 'Teacher Homework', '/teacher/homework', '2026-03-10 10:10:19.466253', '2026-03-10 10:10:19.466253'),
+(57, 'Programme Course', '/programme-course', '2026-03-10 23:07:16.893723', '2026-03-10 23:07:16.893723'),
+(58, 'Events', '/settings/events', '2026-03-11 22:32:31.594763', '2026-03-11 22:32:31.594763'),
+(59, 'Class Rooms', '/settings/types/class-rooms', '2026-03-12 11:50:55.975389', '2026-03-12 11:50:55.975389'),
+(60, 'Pre-inscriptions', '/preinscriptions', '2026-03-12 16:51:58.972411', '2026-03-12 16:51:58.972411');
 
 -- --------------------------------------------------------
 
@@ -415,6 +551,46 @@ CREATE TABLE `planning_students` (
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Déchargement des données de la table `planning_students`
+--
+
+INSERT INTO `planning_students` (`id`, `period`, `teacher_id`, `course_id`, `class_id`, `class_room_id`, `planning_session_type_id`, `date_day`, `hour_start`, `hour_end`, `company_id`, `school_year_id`, `class_course_id`, `statut`, `is_duplicated`, `duplication_source_id`, `has_notes`, `presence_validation_status`, `notes_validation_status`, `presence_validated_teacher`, `presence_validated_controleur`, `notes_validated_teacher`, `notes_validated_controleur`, `created_at`, `updated_at`) VALUES
+(1, 'Q2', 1, 3, 1, 1, NULL, '2025-11-19', '08:00:00', '09:00:00', 3, 1, 16, 2, 0, NULL, 1, 0, 0, 0, 0, 0, 0, '2026-03-12 05:48:49.670218', '2026-03-12 05:48:49.670218'),
+(2, 'Q2', 1, 3, 1, 1, NULL, '2025-11-17', '08:00:00', '09:00:00', 3, 1, 16, 2, 0, NULL, 1, 0, 0, 0, 0, 0, 0, '2026-03-12 05:48:49.670646', '2026-03-12 05:48:49.670646'),
+(3, 'Q2', 1, 3, 1, 1, NULL, '2025-11-17', '10:00:00', '13:00:00', 3, 1, 16, 2, 0, NULL, 1, 0, 0, 0, 0, 0, 0, '2026-03-12 05:51:57.593486', '2026-03-12 05:51:57.593486'),
+(4, 'Q2', 1, 3, 1, 1, NULL, '2025-11-19', '10:00:00', '13:00:00', 3, 1, 16, 2, 0, NULL, 1, 0, 0, 0, 0, 0, 0, '2026-03-12 05:51:57.597337', '2026-03-12 05:51:57.597337');
+
+-- --------------------------------------------------------
+
+--
+-- Structure de la table `preinscriptions`
+--
+
+CREATE TABLE `preinscriptions` (
+  `id` int(11) NOT NULL,
+  `first_name` varchar(255) NOT NULL,
+  `last_name` varchar(255) NOT NULL,
+  `whatsapp_phone` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `nationality` varchar(255) NOT NULL,
+  `city` varchar(255) NOT NULL,
+  `current_formation` varchar(255) NOT NULL,
+  `desired_formation` varchar(255) NOT NULL,
+  `how_known` varchar(255) DEFAULT NULL,
+  `company_id` int(11) NOT NULL,
+  `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `preinscriptions`
+--
+
+INSERT INTO `preinscriptions` (`id`, `first_name`, `last_name`, `whatsapp_phone`, `email`, `nationality`, `city`, `current_formation`, `desired_formation`, `how_known`, `company_id`, `created_at`, `updated_at`) VALUES
+(1, 'Oualid', 'Agourdsaz', '0655996022', 'test@gmail.com', 'Morocco', 'Adassil', 'zasaz', 'Business / Management', 'School / class visit', 3, '2026-03-12 15:46:46.468229', '2026-03-12 15:46:46.468229'),
+(2, 'test', 'hello', '+212655996022', 'waaliide@gmail.com', 'Morocco', 'Agdz', 'test', 'Engineering – Civil', 'Website', 3, '2026-03-12 17:24:43.479321', '2026-03-12 17:24:43.479321');
+
 -- --------------------------------------------------------
 
 --
@@ -429,8 +605,21 @@ CREATE TABLE `programs` (
   `status` int(11) NOT NULL DEFAULT 1,
   `company_id` int(11) NOT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
+  `duration_months` int(11) DEFAULT NULL,
+  `accreditation_date` date DEFAULT NULL,
+  `accreditation_text` text DEFAULT NULL,
+  `accreditation_document` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `programs`
+--
+
+INSERT INTO `programs` (`id`, `title`, `description`, `pdf_file`, `status`, `company_id`, `created_at`, `updated_at`, `duration_months`, `accreditation_date`, `accreditation_text`, `accreditation_document`) VALUES
+(1, 'P 1', NULL, NULL, 1, 3, '2026-03-10 11:47:44.068575', '2026-03-11 16:00:37.000000', 6, '2026-02-27', 'zszsdz', 'Notes-06-03-2026-class_1 (2).pdf'),
+(2, 'P 2', NULL, NULL, 1, 3, '2026-03-10 11:47:48.937876', '2026-03-11 17:10:23.000000', 35, '2026-03-11', 'test', '/uploads/3/programs/1773248339734_qualiphoto-b4634659-6faf-47cb-9012-ebc9dafd24ca__1_.pdf'),
+(3, 'Mollie Hansen', NULL, '/uploads/3/programs/1773240467259_Guide_Prerequis_Edusol.pdf', 1, 3, '2026-03-11 14:47:47.271338', '2026-03-11 14:47:47.271338', NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -453,14 +642,15 @@ CREATE TABLE `roles` (
 --
 
 INSERT INTO `roles` (`id`, `code`, `label`, `company_id`, `is_system`, `created_at`, `updated_at`) VALUES
-(1, 'admin', 'Administrator', NULL, 1, '2026-03-02 11:53:58.347527', '2026-03-02 11:53:58.347527'),
-(2, 'finance', 'Finance', NULL, 1, '2026-03-02 11:53:58.350782', '2026-03-02 11:53:58.350782'),
-(3, 'student', 'Student', NULL, 1, '2026-03-02 11:53:58.354187', '2026-03-02 11:53:58.354187'),
-(4, 'teacher', 'Teacher', NULL, 1, '2026-03-02 11:53:58.356911', '2026-03-02 11:53:58.356911'),
-(5, 'direction', 'Direction', NULL, 1, '2026-03-02 11:53:58.360570', '2026-03-02 11:53:58.360570'),
-(6, 'scholarity', 'Scholarity', NULL, 1, '2026-03-02 11:53:58.363149', '2026-03-02 11:53:58.363149'),
-(7, 'support', 'Support', NULL, 1, '2026-03-02 11:53:58.365627', '2026-03-02 11:53:58.365627'),
-(8, 'parents', 'Parents', NULL, 1, '2026-03-02 11:53:58.368180', '2026-03-02 11:53:58.368180');
+(1, 'admin', 'Administrator', NULL, 1, '2026-03-10 10:08:30.111459', '2026-03-10 10:08:30.111459'),
+(2, 'finance', 'Finance', NULL, 1, '2026-03-10 10:08:30.115597', '2026-03-10 10:08:30.115597'),
+(3, 'student', 'Student', NULL, 1, '2026-03-10 10:08:30.119146', '2026-03-10 10:08:30.119146'),
+(4, 'teacher', 'Teacher', NULL, 1, '2026-03-10 10:08:30.122601', '2026-03-10 10:08:30.122601'),
+(5, 'direction', 'Direction', NULL, 1, '2026-03-10 10:08:30.126057', '2026-03-10 10:08:30.126057'),
+(6, 'scholarity', 'Scholarity', NULL, 1, '2026-03-10 10:08:30.129566', '2026-03-10 10:08:30.129566'),
+(7, 'support', 'Support', NULL, 1, '2026-03-10 10:08:30.132677', '2026-03-10 10:08:30.132677'),
+(8, 'parents', 'Parents', NULL, 1, '2026-03-10 10:08:30.135722', '2026-03-10 10:08:30.135722'),
+(9, 'role', 'role 1', 3, 0, '2026-03-10 11:45:34.298413', '2026-03-10 11:45:34.298413');
 
 -- --------------------------------------------------------
 
@@ -480,13 +670,73 @@ CREATE TABLE `role_pages` (
 --
 
 INSERT INTO `role_pages` (`role_id`, `page_id`, `company_id`, `created_at`) VALUES
-(1, 4, 1, '2026-03-02 11:54:48.000000'),
-(1, 5, 1, '2026-03-02 11:54:48.000000'),
-(1, 6, 1, '2026-03-02 11:54:48.000000'),
-(1, 7, 1, '2026-03-02 11:54:48.000000'),
-(1, 8, 1, '2026-03-02 11:54:48.000000'),
-(1, 9, 1, '2026-03-02 11:54:48.000000'),
-(1, 41, 1, '2026-03-02 11:54:48.000000');
+(1, 4, 3, '2026-03-10 10:09:32.000000'),
+(1, 5, 3, '2026-03-10 10:09:32.000000'),
+(1, 6, 3, '2026-03-10 10:09:32.000000'),
+(1, 7, 3, '2026-03-10 10:09:32.000000'),
+(1, 8, 3, '2026-03-10 10:09:32.000000'),
+(1, 9, 3, '2026-03-10 10:09:32.000000'),
+(1, 41, 3, '2026-03-10 10:09:32.000000'),
+(9, 1, 3, '2026-03-10 11:45:44.625026'),
+(9, 2, 3, '2026-03-10 11:45:44.562280'),
+(9, 3, 3, '2026-03-10 11:45:44.562863'),
+(9, 4, 3, '2026-03-10 11:45:44.251055'),
+(9, 5, 3, '2026-03-10 11:45:44.251300'),
+(9, 6, 3, '2026-03-10 11:45:44.267338'),
+(9, 7, 3, '2026-03-10 11:45:44.254385'),
+(9, 8, 3, '2026-03-10 11:45:44.255688'),
+(9, 9, 3, '2026-03-10 11:45:44.318786'),
+(9, 10, 3, '2026-03-10 11:45:44.309099'),
+(9, 11, 3, '2026-03-10 11:45:44.315263'),
+(9, 12, 3, '2026-03-10 11:45:44.309790'),
+(9, 13, 3, '2026-03-10 11:45:44.315853'),
+(9, 14, 3, '2026-03-10 11:45:44.109561'),
+(9, 15, 3, '2026-03-10 11:45:44.467701'),
+(9, 16, 3, '2026-03-10 11:45:44.561735'),
+(9, 17, 3, '2026-03-10 11:45:44.563394'),
+(9, 18, 3, '2026-03-10 11:45:44.119484'),
+(9, 19, 3, '2026-03-10 11:45:44.513974'),
+(9, 20, 3, '2026-03-10 11:45:44.419367'),
+(9, 21, 3, '2026-03-10 11:45:44.419554'),
+(9, 22, 3, '2026-03-10 11:45:44.199248'),
+(9, 23, 3, '2026-03-10 11:45:44.214391'),
+(9, 24, 3, '2026-03-10 11:45:44.198951'),
+(9, 25, 3, '2026-03-10 11:45:44.191162'),
+(9, 26, 3, '2026-03-10 11:45:44.109914'),
+(9, 27, 3, '2026-03-10 11:45:44.321198'),
+(9, 28, 3, '2026-03-10 11:45:44.120646'),
+(9, 29, 3, '2026-03-10 11:45:44.144638'),
+(9, 30, 3, '2026-03-10 11:45:44.418232'),
+(9, 31, 3, '2026-03-10 11:45:44.421638'),
+(9, 32, 3, '2026-03-10 11:45:44.420582'),
+(9, 33, 3, '2026-03-10 11:45:44.417464'),
+(9, 34, 3, '2026-03-10 11:45:44.629466'),
+(9, 35, 3, '2026-03-10 11:45:44.369426'),
+(9, 36, 3, '2026-03-10 11:45:44.119145'),
+(9, 37, 3, '2026-03-10 11:45:44.371731'),
+(9, 38, 3, '2026-03-10 11:45:44.371532'),
+(9, 39, 3, '2026-03-10 11:45:44.372841'),
+(9, 40, 3, '2026-03-10 11:45:44.373604'),
+(9, 41, 3, '2026-03-10 11:45:44.255895'),
+(9, 42, 3, '2026-03-10 11:45:44.196697'),
+(9, 43, 3, '2026-03-10 11:45:44.190118'),
+(9, 44, 3, '2026-03-10 11:45:44.368447'),
+(9, 45, 3, '2026-03-10 11:45:44.467242'),
+(9, 46, 3, '2026-03-10 11:45:44.465965'),
+(9, 47, 3, '2026-03-10 11:45:44.463861'),
+(9, 48, 3, '2026-03-10 11:45:44.465230'),
+(9, 49, 3, '2026-03-10 11:45:44.466369'),
+(9, 50, 3, '2026-03-10 11:45:44.512467'),
+(9, 51, 3, '2026-03-10 11:45:44.560919'),
+(9, 52, 3, '2026-03-10 11:45:44.511841'),
+(9, 53, 3, '2026-03-10 11:45:44.513165'),
+(9, 54, 3, '2026-03-10 11:45:44.514432'),
+(9, 55, 3, '2026-03-10 11:45:44.562024'),
+(9, 56, 3, '2026-03-10 11:45:44.514207'),
+(9, 57, 3, '2026-03-10 23:10:19.787876'),
+(9, 58, 3, '2026-03-11 22:37:02.476256'),
+(9, 59, 3, '2026-03-12 11:51:03.390266'),
+(9, 60, 3, '2026-03-12 16:53:39.422477');
 
 -- --------------------------------------------------------
 
@@ -503,6 +753,14 @@ CREATE TABLE `school_years` (
   `lifecycle_status` enum('planned','ongoing','completed') NOT NULL DEFAULT 'planned',
   `company_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `school_years`
+--
+
+INSERT INTO `school_years` (`id`, `title`, `start_date`, `end_date`, `statut`, `lifecycle_status`, `company_id`) VALUES
+(1, '2025 -2026', '2025-09-02', '2026-07-02', 1, 'ongoing', 3),
+(2, '2026 - 2027', '2026-09-05', '2027-05-03', 1, 'planned', 3);
 
 -- --------------------------------------------------------
 
@@ -521,6 +779,15 @@ CREATE TABLE `school_year_periods` (
   `school_year_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Déchargement des données de la table `school_year_periods`
+--
+
+INSERT INTO `school_year_periods` (`id`, `title`, `start_date`, `end_date`, `statut`, `lifecycle_status`, `company_id`, `school_year_id`) VALUES
+(1, 'Q3', '2026-01-16', '2026-03-15', 1, 'ongoing', 3, 1),
+(2, 'Q1', '2025-09-02', '2025-11-01', 1, 'completed', 3, 1),
+(3, 'Q2', '2025-11-02', '2026-01-15', 1, 'completed', 3, 1);
+
 -- --------------------------------------------------------
 
 --
@@ -536,8 +803,22 @@ CREATE TABLE `specializations` (
   `company_id` int(11) NOT NULL,
   `program_id` int(11) NOT NULL,
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
-  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
+  `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6),
+  `duration_months` int(11) DEFAULT NULL,
+  `accreditation_date` date DEFAULT NULL,
+  `accreditation_text` text DEFAULT NULL,
+  `accreditation_document` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `specializations`
+--
+
+INSERT INTO `specializations` (`id`, `title`, `description`, `pdf_file`, `status`, `company_id`, `program_id`, `created_at`, `updated_at`, `duration_months`, `accreditation_date`, `accreditation_text`, `accreditation_document`) VALUES
+(1, 'P2 S1', NULL, NULL, 1, 3, 2, '2026-03-10 11:48:04.366199', '2026-03-11 15:49:20.000000', 17, NULL, NULL, NULL),
+(2, 'P2 S2', NULL, NULL, 1, 3, 2, '2026-03-10 11:48:09.810994', '2026-03-11 17:10:23.000000', 18, '2026-03-20', 'zdz', '/uploads/3/specializations/1773248570251_execution-wal-1771849869435.pdf'),
+(3, 'P1 S1', NULL, NULL, 1, 3, 1, '2026-03-10 11:48:22.406211', '2026-03-11 15:44:47.000000', 6, NULL, NULL, NULL),
+(4, 'P1 S2', NULL, NULL, 1, 3, 1, '2026-03-10 11:48:28.110169', '2026-03-10 11:48:28.110169', NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -566,6 +847,14 @@ CREATE TABLE `students` (
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `students`
+--
+
+INSERT INTO `students` (`id`, `gender`, `first_name`, `last_name`, `birthday`, `email`, `email2`, `phone`, `phone2`, `address`, `city`, `country`, `codePostal`, `nationality`, `picture`, `statut`, `company_id`, `created_at`, `updated_at`) VALUES
+(1, NULL, 'Oualid', 'Agourdsaz', NULL, 'test@gmail.com', NULL, '0655996022', NULL, NULL, 'Adassil', NULL, NULL, 'Morocco', NULL, 2, 3, '2026-03-12 17:22:37.560292', '2026-03-12 17:22:37.560292'),
+(2, NULL, 'test', 'hello', NULL, 'waaliide@gmail.com', NULL, '+212655996022', NULL, NULL, 'Agdz', NULL, NULL, 'Morocco', NULL, 2, 3, '2026-03-12 17:25:05.875202', '2026-03-12 17:25:05.875202');
 
 -- --------------------------------------------------------
 
@@ -763,6 +1052,13 @@ CREATE TABLE `teachers` (
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Déchargement des données de la table `teachers`
+--
+
+INSERT INTO `teachers` (`id`, `gender`, `first_name`, `last_name`, `birthday`, `email`, `email2`, `phone`, `phone2`, `address`, `city`, `country`, `codePostal`, `nationality`, `picture`, `statut`, `company_id`, `created_at`, `updated_at`) VALUES
+(1, 'male', 'Warren', 'Hebert', '2005-01-08', 'kodobyx@mailinator.com', 'pyhym@mailinator.com', '+2123724621452', '+2122675258789', 'Deleniti sint elit', NULL, NULL, 'Odio tempor dolore r', 'Nulla molestiae reru', NULL, 2, 3, '2026-03-11 22:42:01.249961', '2026-03-11 22:42:01.249961');
+
 -- --------------------------------------------------------
 
 --
@@ -776,6 +1072,13 @@ CREATE TABLE `teacher_course` (
   `created_at` datetime(6) NOT NULL DEFAULT current_timestamp(6),
   `updated_at` datetime(6) NOT NULL DEFAULT current_timestamp(6) ON UPDATE current_timestamp(6)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Déchargement des données de la table `teacher_course`
+--
+
+INSERT INTO `teacher_course` (`teacher_id`, `course_id`, `status`, `created_at`, `updated_at`) VALUES
+(1, 3, 1, '2026-03-11 22:42:11.710170', '2026-03-11 22:42:11.710170');
 
 -- --------------------------------------------------------
 
@@ -806,9 +1109,11 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password`, `email`, `phone`, `picture`, `privacy_policy_accepted`, `terms_accepted`, `consent_accepted_at`, `company_id`, `statut`, `password_set_token`, `password_set_token_expires_at`, `created_at`, `updated_at`) VALUES
-(1, 'admin_test', '$2b$10$ON8X9hQuykQR0djrv.XlDe0hWbHG1xE6cdEdnELfs7OJ/t.33W7EC', 'walidbirori@gmail.com', '+212655996022', NULL, 1, 1, '2026-03-02 11:54:48', 1, 1, NULL, NULL, '2026-03-02 11:54:48.229104', '2026-03-02 11:55:19.000000'),
-(2, 'walid_agourd', NULL, 'walidagourd@gmail.com', '+212655996022', '/uploads/1/users/1772463569656_pngtree-user-profile-avatar-png-image_10211467.png', 0, 0, NULL, 1, 2, '$2b$10$2LWq5tb5/EnN6rHkCcJgm.MYvL/bqqT1OjxR/60XrfMXzpwTWpJbu', '2026-03-03 13:41:47', '2026-03-02 13:41:47.483519', '2026-03-02 14:59:29.000000'),
-(3, 'sisko001', NULL, 'oualidagourd@gmail.com', '+212655996022', '/uploads/1/users/1772464927150_pngtree-user-profile-avatar-png-image_10211467.png', 0, 0, NULL, 1, 2, '$2b$10$VSUn5CaaibVkouprLF9T5enASeV4372E91X35h8UuOUUdUPNq29JO', '2026-03-03 15:22:07', '2026-03-02 15:22:07.304962', '2026-03-02 15:22:07.304962');
+(1, 'admin_school_1', '$2b$10$FqGAJRvOxjmqdOTGKiZypOsCP4PoZxyCC7LZPvqCXr6XVQ.4ZACWi', 'oualidagourd@gmail.com', '+212655996022', NULL, 1, 1, '2026-03-10 10:09:32', 3, 1, NULL, NULL, '2026-03-10 10:09:32.170574', '2026-03-10 10:10:07.000000'),
+(2, 'sisko001', '$2b$10$vFD8N.sNrbbAU.b4HU2GcuYRTnK3Y7Q5E6I5Y.hpLSAMYypi5DbIe', 'walidagourd@gmail.com', '+212655996022', '/uploads/3/users/1773140049988_pngtree-user-profile-avatar-png-image_10211467.png', 0, 0, NULL, 3, 1, NULL, NULL, '2026-03-10 10:54:10.117389', '2026-03-10 11:46:18.000000'),
+(3, 'warren.hebert', NULL, 'kodobyx@mailinator.com', NULL, NULL, 0, 0, NULL, 3, 2, '$2b$10$wm4ZpIKEPc4Rofads8s9BOi93qdaRP7V9Ml4v87UCANIJ60HjbutS', '2026-03-12 22:42:01', '2026-03-11 22:42:01.379170', '2026-03-11 22:42:01.379170'),
+(4, 'oualid.agourdsaz', NULL, 'test@gmail.com', NULL, NULL, 0, 0, NULL, 3, 2, '$2b$10$xdzXjuZ4/vxp/rFmLdjma.48gMvzoKb1qmzGFFKprI30P9WebADCm', '2026-03-13 17:22:37', '2026-03-12 17:22:37.698379', '2026-03-12 17:22:37.698379'),
+(5, 'test.hello', NULL, 'waaliide@gmail.com', NULL, NULL, 0, 0, NULL, 3, 2, '$2b$10$1i3bMhCYTPGbNPXVgCXPCuNwx6hcQpTTUv.whAk26jB2QmAqtu6zm', '2026-03-13 17:25:27', '2026-03-12 17:25:06.013354', '2026-03-12 17:25:27.000000');
 
 -- --------------------------------------------------------
 
@@ -827,9 +1132,11 @@ CREATE TABLE `user_roles` (
 --
 
 INSERT INTO `user_roles` (`user_id`, `role_id`, `company_id`) VALUES
-(1, 1, 1),
-(2, 2, 1),
-(2, 5, 1);
+(1, 1, 3),
+(2, 9, 3),
+(3, 4, 3),
+(4, 3, 3),
+(5, 3, 3);
 
 --
 -- Index pour les tables déchargées
@@ -841,8 +1148,7 @@ INSERT INTO `user_roles` (`user_id`, `role_id`, `company_id`) VALUES
 ALTER TABLE `administrators`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `IDX_4ee5216a00cb99b2dede98509c` (`email`),
-  ADD KEY `FK_c811b22246e7324f4a8d801d033` (`company_id`),
-  ADD KEY `FK_357ee5dce7fcba7273ee816f105` (`class_room_id`);
+  ADD KEY `FK_c811b22246e7324f4a8d801d033` (`company_id`);
 
 --
 -- Index pour la table `attestations`
@@ -874,7 +1180,7 @@ ALTER TABLE `classroom_types`
 --
 ALTER TABLE `class_courses`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `FK_1cb14257cde585a3acfed6dcc83` (`company_id`),
+  ADD UNIQUE KEY `UQ_class_courses_company_level_module_course` (`company_id`,`level_id`,`module_id`,`course_id`),
   ADD KEY `FK_5e6c3c020c1138eadf3830a6809` (`level_id`),
   ADD KEY `FK_a6445f75e63d14f079c46e438b7` (`module_id`),
   ADD KEY `FK_794c5f3538b65ab5c6aa6622c3c` (`course_id`);
@@ -902,7 +1208,8 @@ ALTER TABLE `class_students`
 --
 ALTER TABLE `companies`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `IDX_d0af6f5866201d5cb424767744` (`email`);
+  ADD UNIQUE KEY `IDX_d0af6f5866201d5cb424767744` (`email`),
+  ADD UNIQUE KEY `IDX_4bb74c0354f8b144f1b09d582c` (`public_token`);
 
 --
 -- Index pour la table `courses`
@@ -910,6 +1217,12 @@ ALTER TABLE `companies`
 ALTER TABLE `courses`
   ADD PRIMARY KEY (`id`),
   ADD KEY `FK_fcb4308df0fe59417815b1ea021` (`company_id`);
+
+--
+-- Index pour la table `events`
+--
+ALTER TABLE `events`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Index pour la table `levels`
@@ -969,6 +1282,13 @@ ALTER TABLE `planning_students`
   ADD KEY `FK_318a77de4e816d9a06e2350a07f` (`planning_session_type_id`),
   ADD KEY `FK_76c2d6e81d9ac2319db0dc9c573` (`school_year_id`),
   ADD KEY `FK_c891452aca76f45a1a98663fa1d` (`class_course_id`);
+
+--
+-- Index pour la table `preinscriptions`
+--
+ALTER TABLE `preinscriptions`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `FK_5d3ff8734bd835de33fe9e622db` (`company_id`);
 
 --
 -- Index pour la table `programs`
@@ -1148,25 +1468,25 @@ ALTER TABLE `attestations`
 -- AUTO_INCREMENT pour la table `classes`
 --
 ALTER TABLE `classes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT pour la table `classroom_types`
 --
 ALTER TABLE `classroom_types`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT pour la table `class_courses`
 --
 ALTER TABLE `class_courses`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT pour la table `class_rooms`
 --
 ALTER TABLE `class_rooms`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT pour la table `class_students`
@@ -1178,19 +1498,25 @@ ALTER TABLE `class_students`
 -- AUTO_INCREMENT pour la table `companies`
 --
 ALTER TABLE `companies`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT pour la table `courses`
 --
 ALTER TABLE `courses`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT pour la table `events`
+--
+ALTER TABLE `events`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT pour la table `levels`
 --
 ALTER TABLE `levels`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT pour la table `level_pricings`
@@ -1202,13 +1528,13 @@ ALTER TABLE `level_pricings`
 -- AUTO_INCREMENT pour la table `modules`
 --
 ALTER TABLE `modules`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT pour la table `pages`
 --
 ALTER TABLE `pages`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=57;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=61;
 
 --
 -- AUTO_INCREMENT pour la table `planning_session_types`
@@ -1220,43 +1546,49 @@ ALTER TABLE `planning_session_types`
 -- AUTO_INCREMENT pour la table `planning_students`
 --
 ALTER TABLE `planning_students`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT pour la table `preinscriptions`
+--
+ALTER TABLE `preinscriptions`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT pour la table `programs`
 --
 ALTER TABLE `programs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT pour la table `roles`
 --
 ALTER TABLE `roles`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT pour la table `school_years`
 --
 ALTER TABLE `school_years`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT pour la table `school_year_periods`
 --
 ALTER TABLE `school_year_periods`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT pour la table `specializations`
 --
 ALTER TABLE `specializations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT pour la table `students`
 --
 ALTER TABLE `students`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT pour la table `student_attestations`
@@ -1310,13 +1642,13 @@ ALTER TABLE `student_report_details`
 -- AUTO_INCREMENT pour la table `teachers`
 --
 ALTER TABLE `teachers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT pour la table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- Contraintes pour les tables déchargées
@@ -1326,7 +1658,6 @@ ALTER TABLE `users`
 -- Contraintes pour la table `administrators`
 --
 ALTER TABLE `administrators`
-  ADD CONSTRAINT `FK_357ee5dce7fcba7273ee816f105` FOREIGN KEY (`class_room_id`) REFERENCES `class_rooms` (`id`) ON DELETE NO ACTION ON UPDATE NO ACTION,
   ADD CONSTRAINT `FK_c811b22246e7324f4a8d801d033` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE ON UPDATE NO ACTION;
 
 --
@@ -1426,6 +1757,12 @@ ALTER TABLE `planning_students`
   ADD CONSTRAINT `FK_c8319e185ac9101aa68ce542173` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE ON UPDATE NO ACTION,
   ADD CONSTRAINT `FK_c891452aca76f45a1a98663fa1d` FOREIGN KEY (`class_course_id`) REFERENCES `class_courses` (`id`) ON DELETE SET NULL ON UPDATE NO ACTION,
   ADD CONSTRAINT `FK_dab87723154a49f5c819bfda920` FOREIGN KEY (`class_room_id`) REFERENCES `class_rooms` (`id`) ON DELETE CASCADE ON UPDATE NO ACTION;
+
+--
+-- Contraintes pour la table `preinscriptions`
+--
+ALTER TABLE `preinscriptions`
+  ADD CONSTRAINT `FK_5d3ff8734bd835de33fe9e622db` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE CASCADE ON UPDATE NO ACTION;
 
 --
 -- Contraintes pour la table `programs`
