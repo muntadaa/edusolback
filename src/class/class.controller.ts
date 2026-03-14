@@ -5,6 +5,7 @@ import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
 import { ClassQueryDto } from './dto/class-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateClassBatchDto } from './dto/create-class-batch.dto';
 
 @ApiTags('Classes')
 @ApiBearerAuth()
@@ -21,6 +22,17 @@ export class ClassController {
       throw new BadRequestException('User must belong to a company');
     }
     return this.classService.create(createClassDto, companyId);
+  }
+
+  @Post('batch')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 201, description: 'Multiple classes created successfully.' })
+  createBatch(@Request() req, @Body() dto: CreateClassBatchDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.classService.createMany(dto.items, companyId);
   }
 
   @Get()

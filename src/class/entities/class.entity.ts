@@ -18,8 +18,8 @@ export class ClassEntity {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  title: string;
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  title: string | null;
 
   @Column({ type: 'longtext', nullable: true })
   description: string;

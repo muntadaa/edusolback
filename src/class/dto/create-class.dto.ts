@@ -3,10 +3,10 @@ import { IsNotEmpty, IsString, IsOptional, IsNumber, Min, Max } from 'class-vali
 import { Type } from 'class-transformer';
 
 export class CreateClassDto {
-  @ApiProperty({ description: 'Class title', example: 'Grade 6 - Section A' })
+  @ApiPropertyOptional({ description: 'Class title (optional)', example: 'Grade 6 - Section A' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  title: string;
+  title?: string;
 
   @ApiPropertyOptional({ description: 'Optional description', example: 'Advanced math focus group.' })
   @IsOptional()

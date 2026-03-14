@@ -89,6 +89,20 @@ export class ClassService {
     }
   }
 
+  async createMany(dtos: CreateClassDto[], companyId: number): Promise<ClassEntity[]> {
+    if (!dtos || dtos.length === 0) {
+      throw new BadRequestException('At least one class is required');
+    }
+
+    const created: ClassEntity[] = [];
+    for (const dto of dtos) {
+      // Reuse existing single-create logic, including validations and error handling
+      const cls = await this.create(dto, companyId);
+      created.push(cls);
+    }
+    return created;
+  }
+
   async findAll(query: ClassQueryDto, companyId: number): Promise<PaginatedResponseDto<ClassEntity>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
