@@ -1,36 +1,18 @@
 import {
-  Column,
-  CreateDateColumn,
   Entity,
-  JoinColumn,
-  ManyToOne,
-  OneToMany,
   PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Level } from '../../level/entities/level.entity';
 import { Company } from '../../company/entities/company.entity';
-import { StudentPayment } from '../../student-payment/entities/student-payment.entity';
-import { SchoolYear } from '../../school-years/entities/school-year.entity';
 
-@Entity('level_pricings')
-export class LevelPricing {
+@Entity('rubriques')
+export class Rubrique {
   @PrimaryGeneratedColumn()
   id: number;
-
-  @Column()
-  level_id: number;
-
-  @ManyToOne(() => Level, { nullable: false, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'level_id' })
-  level: Level;
-
-  @Column()
-  school_year_id: number;
-
-  @ManyToOne(() => SchoolYear, { nullable: false, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'school_year_id' })
-  schoolYear: SchoolYear;
 
   @Column({ length: 150 })
   title: string;
@@ -57,12 +39,10 @@ export class LevelPricing {
   @Column({ type: 'int', default: 2, name: 'statut' })
   status: number;
 
-  @OneToMany(() => StudentPayment, payment => payment.levelPricing)
-  payments: StudentPayment[];
-
   @CreateDateColumn()
   created_at: Date;
 
   @UpdateDateColumn()
   updated_at: Date;
 }
+

@@ -2,26 +2,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, MaxLength, Min } from 'class-validator';
 
-export class CreateLevelPricingDto {
-  @ApiProperty({ description: 'Level identifier this pricing is linked to', example: 2 })
-  @Type(() => Number)
-  @IsNumber()
-  level_id: number;
-
-  @ApiProperty({ description: 'Pricing title', example: 'Monthly Plan' })
+export class CreateRubriqueDto {
+  @ApiProperty({ description: 'Rubrique title', example: 'Registration fee' })
   @IsString()
   @MaxLength(150)
   title: string;
 
-  @ApiProperty({
-    description: 'School year identifier this pricing is linked to',
-    example: 7,
-  })
-  @Type(() => Number)
-  @IsNumber()
-  school_year_id: number;
-
-  @ApiProperty({ description: 'Total amount for this plan', example: 500 })
+  @ApiProperty({ description: 'Amount for this rubrique', example: 500 })
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
@@ -45,7 +32,7 @@ export class CreateLevelPricingDto {
   @Min(1)
   occurrences?: number;
 
-  @ApiPropertyOptional({ description: 'Flag indicating if the plan is monthly (1) or not (0)', example: 1, default: 0 })
+  @ApiPropertyOptional({ description: 'Flag indicating if the rubrique is monthly (1) or not (0)', example: 1, default: 0 })
   @IsOptional()
   @Type(() => Number)
   @IsIn([0, 1])
@@ -64,3 +51,4 @@ export class CreateLevelPricingDto {
   @IsIn([-2, -1, 0, 1, 2])
   status?: number;
 }
+

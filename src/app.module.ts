@@ -46,6 +46,9 @@ import { ClassCourseModule } from './class-course/class-course.module';
 import { TeacherCourseModule } from './teacher-course/teacher-course.module';
 import { EventsModule } from './events/events.module';
 import { PreinscriptionsModule } from './preinscriptions/preinscriptions.module';
+import { RubriqueModule } from './rubrique/rubrique.module';
+import { StudentPaymentDetailsModule } from './student_payment_details/student_payment_details.module';
+import { StudentPaymentAllocationsModule } from './student_payment_allocations/student_payment_allocations.module';
 
 @Module({
   imports: [
@@ -104,6 +107,9 @@ import { PreinscriptionsModule } from './preinscriptions/preinscriptions.module'
     TeacherCourseModule,
     EventsModule,
     PreinscriptionsModule,
+    RubriqueModule,
+    StudentPaymentDetailsModule,
+    StudentPaymentAllocationsModule,
   ],
   controllers: [AppController],
   providers: [

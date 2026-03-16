@@ -8,6 +8,7 @@ import { LevelPricingQueryDto } from './dto/level-pricing-query.dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
 import { Level } from '../level/entities/level.entity';
+import { SchoolYear } from '../school-years/entities/school-year.entity';
 
 @Injectable()
 export class LevelPricingService {
@@ -16,6 +17,8 @@ export class LevelPricingService {
     private readonly repo: Repository<LevelPricing>,
     @InjectRepository(Level)
     private readonly levelRepo: Repository<Level>,
+    @InjectRepository(SchoolYear)
+    private readonly schoolYearRepo: Repository<SchoolYear>,
   ) {}
 
   async create(dto: CreateLevelPricingDto, companyId: number): Promise<LevelPricing> {
@@ -27,6 +30,14 @@ export class LevelPricingService {
       throw new BadRequestException('Level not found or does not belong to your company');
     }
 
+    // Verify school year exists and belongs to the same company
+    const schoolYear = await this.schoolYearRepo.findOne({
+      where: { id: dto.school_year_id, company_id: companyId, status: Not(-2) },
+    });
+    if (!schoolYear) {
+      throw new BadRequestException('School year not found or does not belong to your company');
+    }
+
     // Always set company_id from authenticated user
     const entity = this.repo.create({
       ...dto,
@@ -34,10 +45,27 @@ export class LevelPricingService {
       status: dto.status ?? 2,
       occurrences: dto.occurrences ?? 1,
       every_month: dto.every_month ?? 0,
+      vat_rate: dto.vat_rate ?? 0,
     });
 
     const saved = await this.repo.save(entity);
     return this.findOne(saved.id, companyId);
+  }
+
+  async createMany(
+    dtos: CreateLevelPricingDto[],
+    companyId: number,
+  ): Promise<LevelPricing[]> {
+    if (!dtos || dtos.length === 0) {
+      throw new BadRequestException('At least one level pricing is required');
+    }
+
+    const created: LevelPricing[] = [];
+    for (const dto of dtos) {
+      const pricing = await this.create(dto, companyId);
+      created.push(pricing);
+    }
+    return created;
   }
 
   async findAll(query: LevelPricingQueryDto, companyId: number): Promise<PaginatedResponseDto<LevelPricing>> {
@@ -62,6 +90,11 @@ export class LevelPricingService {
 
     if (query.level_id) {
       qb.andWhere('pricing.level_id = :level_id', { level_id: query.level_id });
+    }
+    if (query.school_year_id) {
+      qb.andWhere('pricing.school_year_id = :school_year_id', {
+        school_year_id: query.school_year_id,
+      });
     }
 
     if (query.search) {
@@ -93,6 +126,16 @@ export class LevelPricingService {
       });
       if (!level) {
         throw new BadRequestException('Level not found or does not belong to your company');
+      }
+    }
+
+    // If school_year_id is being updated, verify it belongs to the same company
+    if (dto.school_year_id !== undefined) {
+      const schoolYear = await this.schoolYearRepo.findOne({
+        where: { id: dto.school_year_id, company_id: companyId, status: Not(-2) },
+      });
+      if (!schoolYear) {
+        throw new BadRequestException('School year not found or does not belong to your company');
       }
     }
 

@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
-import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException, ParseIntPipe } from '@nestjs/common';
+import { ApiBearerAuth, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
 import { ClassStudentService } from './class-student.service';
 import { CreateClassStudentDto } from './dto/create-class-student.dto';
 import { UpdateClassStudentDto } from './dto/update-class-student.dto';
@@ -32,6 +32,32 @@ export class ClassStudentController {
       throw new BadRequestException('User must belong to a company');
     }
     return this.classStudentService.findAll(query, companyId);
+  }
+
+  @Get('history')
+  @UseGuards(JwtAuthGuard)
+  @ApiQuery({ name: 'student_id', required: true, description: 'Student identifier' })
+  @ApiQuery({
+    name: 'includeDeleted',
+    required: false,
+    description: 'If true, include deleted assignments (status = -2)',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Full class assignment history for a student across all years, ordered by school year then by creation date.',
+  })
+  findHistory(
+    @Request() req,
+    @Query('student_id', ParseIntPipe) studentId: number,
+    @Query('includeDeleted') includeDeleted?: string,
+  ) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    const include = includeDeleted === 'true';
+    return this.classStudentService.findHistoryForStudent(studentId, companyId, include);
   }
 
   @Get(':id')

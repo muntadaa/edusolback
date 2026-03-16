@@ -45,6 +45,16 @@ export class CreateCompanyDto {
   @IsString()
   codePostal?: string;
 
+  @ApiPropertyOptional({
+    description: 'Default currency code (ISO‑4217, 3 uppercase letters, e.g. MAD, EUR, USD)',
+    example: 'MAD',
+  })
+  @IsOptional()
+  @Matches(/^[A-Z]{3}$/, {
+    message: 'currency must be a valid ISO‑4217 code (3 uppercase letters, e.g. MAD, EUR, USD)',
+  })
+  currency?: string;
+
   @ApiPropertyOptional({ description: 'Workflow status indicator', example: 1, minimum: -2, maximum: 2 })
   @IsOptional()
   @IsInt()

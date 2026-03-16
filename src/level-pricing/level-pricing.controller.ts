@@ -5,6 +5,7 @@ import { CreateLevelPricingDto } from './dto/create-level-pricing.dto';
 import { UpdateLevelPricingDto } from './dto/update-level-pricing.dto';
 import { LevelPricingQueryDto } from './dto/level-pricing-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateLevelPricingBatchDto } from './dto/create-level-pricing-batch.dto';
 
 @ApiTags('Level Pricings')
 @ApiBearerAuth()
@@ -21,6 +22,17 @@ export class LevelPricingController {
       throw new BadRequestException('User must belong to a company');
     }
     return this.levelPricingService.create(dto, companyId);
+  }
+
+  @Post('batch')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 201, description: 'Multiple level pricings created successfully.' })
+  createBatch(@Request() req, @Body() dto: CreateLevelPricingBatchDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.levelPricingService.createMany(dto.items, companyId);
   }
 
   @Get()
