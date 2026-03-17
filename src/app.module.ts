@@ -49,6 +49,8 @@ import { PreinscriptionsModule } from './preinscriptions/preinscriptions.module'
 import { RubriqueModule } from './rubrique/rubrique.module';
 import { StudentPaymentDetailsModule } from './student_payment_details/student_payment_details.module';
 import { StudentPaymentAllocationsModule } from './student_payment_allocations/student_payment_allocations.module';
+import { StudentAccountingModule } from './student-accounting/student-accounting.module';
+import { PreInscriptionDiplomaModule } from './pre-inscription-diploma/pre-inscription-diploma.module';
 
 @Module({
   imports: [
@@ -110,6 +112,8 @@ import { StudentPaymentAllocationsModule } from './student_payment_allocations/s
     RubriqueModule,
     StudentPaymentDetailsModule,
     StudentPaymentAllocationsModule,
+    StudentAccountingModule,
+    PreInscriptionDiplomaModule,
   ],
   controllers: [AppController],
   providers: [

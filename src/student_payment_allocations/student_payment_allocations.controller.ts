@@ -1,34 +1,45 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { StudentPaymentAllocationsService } from './student_payment_allocations.service';
-import { CreateStudentPaymentAllocationDto } from './dto/create-student_payment_allocation.dto';
-import { UpdateStudentPaymentAllocationDto } from './dto/update-student_payment_allocation.dto';
+import { StudentPaymentAllocationQueryDto } from './dto/student-payment-allocation-query.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+@ApiTags('Student Payment Allocations')
+@ApiBearerAuth()
 @Controller('student-payment-allocations')
 export class StudentPaymentAllocationsController {
   constructor(private readonly studentPaymentAllocationsService: StudentPaymentAllocationsService) {}
 
-  @Post()
-  create(@Body() createStudentPaymentAllocationDto: CreateStudentPaymentAllocationDto) {
-    return this.studentPaymentAllocationsService.create(createStudentPaymentAllocationDto);
-  }
-
   @Get()
-  findAll() {
-    return this.studentPaymentAllocationsService.findAll();
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Retrieve payment allocations with pagination.' })
+  findAll(@Request() req, @Query() query: StudentPaymentAllocationQueryDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+
+    return this.studentPaymentAllocationsService.findAll(query, companyId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.studentPaymentAllocationsService.findOne(+id);
-  }
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Retrieve one payment allocation.' })
+  findOne(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateStudentPaymentAllocationDto: UpdateStudentPaymentAllocationDto) {
-    return this.studentPaymentAllocationsService.update(+id, updateStudentPaymentAllocationDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.studentPaymentAllocationsService.remove(+id);
+    return this.studentPaymentAllocationsService.findOne(id, companyId);
   }
 }

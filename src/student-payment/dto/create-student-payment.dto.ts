@@ -13,28 +13,11 @@ export class CreateStudentPaymentDto {
   @IsNumber()
   school_year_id: number;
 
-  @ApiProperty({ description: 'Level identifier related to the payment', example: 2 })
-  @Type(() => Number)
-  @IsNumber()
-  level_id: number;
-
-  @ApiPropertyOptional({ description: 'Level pricing identifier used for this payment', example: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  level_pricing_id?: number;
-
-  @ApiProperty({ description: 'Total amount expected', example: 1200 })
+  @ApiProperty({ description: 'Amount of money received for this payment', example: 400 })
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
   amount: number;
-
-  @ApiProperty({ description: 'Amount currently paid', example: 400 })
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  payment: number;
 
   @ApiProperty({ description: 'Payment date', example: '2025-01-10' })
   @IsDateString()

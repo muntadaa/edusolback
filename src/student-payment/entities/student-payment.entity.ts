@@ -4,14 +4,14 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Student } from '../../students/entities/student.entity';
 import { SchoolYear } from '../../school-years/entities/school-year.entity';
-import { Level } from '../../level/entities/level.entity';
-import { LevelPricing } from '../../level-pricing/entities/level-pricing.entity';
 import { Company } from '../../company/entities/company.entity';
+import { StudentPaymentAllocation } from '../../student_payment_allocations/entities/student_payment_allocation.entity';
 
 @Entity('student_payments')
 export class StudentPayment {
@@ -32,25 +32,8 @@ export class StudentPayment {
   @JoinColumn({ name: 'school_year_id' })
   schoolYear: SchoolYear;
 
-  @Column()
-  level_id: number;
-
-  @ManyToOne(() => Level, { nullable: false, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'level_id' })
-  level: Level;
-
-  @Column({ nullable: true })
-  level_pricing_id?: number;
-
-  @ManyToOne(() => LevelPricing, pricing => pricing.payments, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'level_pricing_id' })
-  levelPricing?: LevelPricing;
-
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: number;
-
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
-  payment: number;
 
   @Column({ type: 'date' })
   date: string;
@@ -58,7 +41,7 @@ export class StudentPayment {
   @Column({ length: 50 })
   mode: string;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   reference?: string;
 
   @Column()
@@ -70,6 +53,9 @@ export class StudentPayment {
 
   @Column({ type: 'int', default: 2, name: 'statut' })
   status: number;
+
+  @OneToMany(() => StudentPaymentAllocation, (allocation) => allocation.studentPayment)
+  allocations: StudentPaymentAllocation[];
 
   @CreateDateColumn()
   created_at: Date;

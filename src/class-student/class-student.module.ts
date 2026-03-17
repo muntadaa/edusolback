@@ -4,9 +4,10 @@ import { ClassStudentService } from './class-student.service';
 import { ClassStudentController } from './class-student.controller';
 import { ClassStudent } from './entities/class-student.entity';
 import { ClassEntity } from '../class/entities/class.entity';
+import { StudentAccountingModule } from '../student-accounting/student-accounting.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ClassStudent, ClassEntity])],
+  imports: [TypeOrmModule.forFeature([ClassStudent, ClassEntity]), StudentAccountingModule],
   controllers: [ClassStudentController],
   providers: [ClassStudentService],
   exports: [ClassStudentService],

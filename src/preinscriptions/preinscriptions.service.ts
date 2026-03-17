@@ -5,11 +5,18 @@ import { CreatePreinscriptionDto } from './dto/create-preinscription.dto';
 import { UpdatePreinscriptionDto } from './dto/update-preinscription.dto';
 import { PreInscription } from './entities/preinscription.entity';
 import { Company } from '../company/entities/company.entity';
-import { StudentsService } from '../students/students.service';
-import { CreateStudentDto } from '../students/dto/create-student.dto';
 import { PreinscriptionsQueryDto } from './dto/preinscriptions-query.dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
+import { PreInscriptionStatus } from './enums/preinscription-status.enum';
+import { Level } from '../level/entities/level.entity';
+import { PreInscriptionDiploma } from '../pre-inscription-diploma/entities/pre-inscription-diploma.entity';
+import { PreInscriptionConversionService } from './preinscription-conversion.service';
+import { canTransition } from './workflow/preinscription.workflow';
+import { User } from '../users/entities/user.entity';
+import { UserRole } from '../user-roles/entities/user-role.entity';
+import { RolePage } from '../pages/entities/role-page.entity';
+import { Page } from '../pages/entities/page.entity';
 
 @Injectable()
 export class PreinscriptionsService {
@@ -18,7 +25,19 @@ export class PreinscriptionsService {
     private readonly repo: Repository<PreInscription>,
     @InjectRepository(Company)
     private readonly companyRepo: Repository<Company>,
-    private readonly studentsService: StudentsService,
+    @InjectRepository(Level)
+    private readonly levelRepo: Repository<Level>,
+    @InjectRepository(PreInscriptionDiploma)
+    private readonly diplomaRepo: Repository<PreInscriptionDiploma>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
+    @InjectRepository(UserRole)
+    private readonly userRoleRepo: Repository<UserRole>,
+    @InjectRepository(RolePage)
+    private readonly rolePageRepo: Repository<RolePage>,
+    @InjectRepository(Page)
+    private readonly pageRepo: Repository<Page>,
+    private readonly conversionService: PreInscriptionConversionService,
   ) {}
 
   private async resolveCompanyByPublicToken(publicToken: string): Promise<Company> {
@@ -32,7 +51,10 @@ export class PreinscriptionsService {
   }
 
   async create(createPreinscriptionDto: CreatePreinscriptionDto): Promise<PreInscription> {
-    const entity = this.repo.create(createPreinscriptionDto);
+    const entity = this.repo.create({
+      ...createPreinscriptionDto,
+      status: PreInscriptionStatus.NEW,
+    });
     return this.repo.save(entity);
   }
 
@@ -98,10 +120,60 @@ export class PreinscriptionsService {
       );
     }
 
+    if (query.country) {
+      qb.andWhere('pre.nationality LIKE :country', {
+        country: `%${query.country}%`,
+      });
+    }
+
+    if (query.city) {
+      qb.andWhere('pre.city LIKE :city', { city: `%${query.city}%` });
+    }
+
+    if (query.desired_formation) {
+      qb.andWhere('pre.desired_formation LIKE :desiredFormation', {
+        desiredFormation: `%${query.desired_formation}%`,
+      });
+    }
+
     qb.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
     return PaginationService.createResponse(data, page, limit, total);
+  }
+
+  async getEligibleCommercialUsers(companyId: number): Promise<
+    Array<{
+      id: number;
+      username: string;
+      email: string;
+      phone: string | null;
+      picture: string | null;
+    }>
+  > {
+    const route = '/preinscriptions/commercial';
+
+    return this.userRepo
+      .createQueryBuilder('u')
+      .innerJoin(UserRole, 'ur', 'ur.user_id = u.id AND ur.company_id = :companyId', {
+        companyId,
+      })
+      .innerJoin(RolePage, 'rp', 'rp.role_id = ur.role_id AND rp.company_id = :companyId', {
+        companyId,
+      })
+      .innerJoin(Page, 'p', 'p.id = rp.page_id AND p.route = :route', { route })
+      .where('u.company_id = :companyId', { companyId })
+      .andWhere('u.status <> :deletedStatus', { deletedStatus: -2 })
+      .select([
+        'u.id AS id',
+        'u.username AS username',
+        'u.email AS email',
+        'u.phone AS phone',
+        'u.picture AS picture',
+      ])
+      .distinct(true)
+      .orderBy('u.username', 'ASC')
+      .getRawMany();
   }
 
   async findOne(id: number): Promise<PreInscription> {
@@ -140,6 +212,8 @@ export class PreinscriptionsService {
     // Prevent changing company_id from payload
     const dtoWithoutCompany = { ...updatePreinscriptionDto } as any;
     delete dtoWithoutCompany.company_id;
+    // Prevent creating invalid workflow jumps through the generic update endpoint for now
+    delete dtoWithoutCompany.status;
     const merged = this.repo.merge(existing, dtoWithoutCompany);
     merged.company_id = companyId;
     return this.repo.save(merged);
@@ -153,6 +227,187 @@ export class PreinscriptionsService {
   async removeByCompany(id: number, companyId: number): Promise<void> {
     const existing = await this.findOneByCompany(id, companyId);
     await this.repo.remove(existing);
+  }
+
+  async assignCommercial(
+    preInscriptionId: number,
+    commercialId: number,
+  ): Promise<PreInscription> {
+    const preinscription = await this.findOne(preInscriptionId);
+    const commercial = await this.userRepo.findOne({
+      where: {
+        id: commercialId,
+        company_id: preinscription.company_id,
+        status: Not(-2),
+      },
+    });
+    if (!commercial) {
+      throw new NotFoundException('Commercial user not found in this company');
+    }
+
+    const hasCommercialPageAccess = await this.userHasAccessToRoute(
+      commercialId,
+      preinscription.company_id,
+      '/preinscriptions/commercial',
+    );
+    if (!hasCommercialPageAccess) {
+      throw new BadRequestException(
+        'Selected user does not have page access to /preinscriptions/commercial',
+      );
+    }
+
+    if (!canTransition(preinscription.status, PreInscriptionStatus.ASSIGNED_TO_COMMERCIAL)) {
+      throw new BadRequestException(
+        `Invalid status transition: ${preinscription.status} -> ${PreInscriptionStatus.ASSIGNED_TO_COMMERCIAL}`,
+      );
+    }
+    preinscription.commercial_id = commercialId;
+    preinscription.status = PreInscriptionStatus.ASSIGNED_TO_COMMERCIAL;
+    return this.repo.save(preinscription);
+  }
+
+  private async userHasAccessToRoute(
+    userId: number,
+    companyId: number,
+    route: string,
+  ): Promise<boolean> {
+    const page = await this.pageRepo.findOne({ where: { route } });
+    if (!page) {
+      return false;
+    }
+
+    const roleAssignments = await this.userRoleRepo.find({
+      where: { user_id: userId, company_id: companyId },
+    });
+    if (roleAssignments.length === 0) {
+      return false;
+    }
+
+    const roleIds = roleAssignments.map((x) => x.role_id);
+    return this.rolePageRepo
+      .createQueryBuilder('rp')
+      .where('rp.page_id = :pageId', { pageId: page.id })
+      .andWhere('rp.company_id = :companyId', { companyId })
+      .andWhere('rp.role_id IN (:...roleIds)', { roleIds })
+      .getExists();
+  }
+
+  async updateCommercialEvaluation(
+    id: number,
+    dto: {
+      meeting_notes?: string | null;
+      commercial_comment?: string | null;
+      proposed_program_id?: number | null;
+      proposed_specialization_id?: number | null;
+      proposed_level_id?: number | null;
+    },
+  ): Promise<PreInscription> {
+    const preinscription = await this.findOne(id);
+    if (!canTransition(preinscription.status, PreInscriptionStatus.COMMERCIAL_REVIEW)) {
+      throw new BadRequestException(
+        `Invalid status transition: ${preinscription.status} -> ${PreInscriptionStatus.COMMERCIAL_REVIEW}`,
+      );
+    }
+
+    if (dto.meeting_notes !== undefined) {
+      preinscription.meeting_notes = dto.meeting_notes;
+    }
+    if (dto.commercial_comment !== undefined) {
+      preinscription.commercial_comment = dto.commercial_comment;
+    }
+    if (dto.proposed_program_id !== undefined) {
+      preinscription.proposed_program_id = dto.proposed_program_id;
+    }
+    if (dto.proposed_specialization_id !== undefined) {
+      preinscription.proposed_specialization_id = dto.proposed_specialization_id;
+    }
+    if (dto.proposed_level_id !== undefined) {
+      preinscription.proposed_level_id = dto.proposed_level_id;
+    }
+
+    preinscription.status = PreInscriptionStatus.COMMERCIAL_REVIEW;
+    return this.repo.save(preinscription);
+  }
+
+  async submitToAdministration(id: number): Promise<PreInscription> {
+    const preinscription = await this.findOne(id);
+    if (!canTransition(preinscription.status, PreInscriptionStatus.SENT_TO_ADMIN)) {
+      throw new BadRequestException(
+        `Invalid status transition: ${preinscription.status} -> ${PreInscriptionStatus.SENT_TO_ADMIN}`,
+      );
+    }
+
+    const proposedLevelId = preinscription.proposed_level_id;
+    if (!proposedLevelId) {
+      throw new BadRequestException('proposed_level_id is required before submitting to administration');
+    }
+
+    const level = await this.levelRepo.findOne({
+      where: {
+        id: proposedLevelId,
+        company_id: preinscription.company_id,
+        status: Not(-2),
+      },
+    });
+    if (!level) {
+      throw new BadRequestException(`proposed_level_id ${proposedLevelId} is invalid`);
+    }
+
+    const diplomaCount = await this.diplomaRepo.count({
+      where: { preinscription_id: preinscription.id },
+    });
+    if (diplomaCount < 1) {
+      throw new BadRequestException('At least one diploma is required before submitting to administration');
+    }
+
+    preinscription.status = PreInscriptionStatus.SENT_TO_ADMIN;
+    return this.repo.save(preinscription);
+  }
+
+  async adminDecision(
+    id: number,
+    decisionDto: {
+      approved: boolean;
+      final_program_id?: number | null;
+      final_specialization_id?: number | null;
+      final_level_id?: number | null;
+      admin_comment?: string | null;
+    },
+  ): Promise<PreInscription> {
+    const preinscription = await this.findOne(id);
+    const targetStatus = decisionDto.approved
+      ? PreInscriptionStatus.APPROVED
+      : PreInscriptionStatus.REJECTED;
+    if (!canTransition(preinscription.status, targetStatus)) {
+      throw new BadRequestException(
+        `Invalid status transition: ${preinscription.status} -> ${targetStatus}`,
+      );
+    }
+
+    if (decisionDto.final_program_id !== undefined) {
+      preinscription.final_program_id = decisionDto.final_program_id;
+    }
+    if (decisionDto.final_specialization_id !== undefined) {
+      preinscription.final_specialization_id = decisionDto.final_specialization_id;
+    }
+    if (decisionDto.final_level_id !== undefined) {
+      preinscription.final_level_id = decisionDto.final_level_id;
+    }
+    if (decisionDto.admin_comment !== undefined) {
+      preinscription.admin_comment = decisionDto.admin_comment;
+    }
+
+    preinscription.status = targetStatus;
+
+    preinscription.decision_at = new Date();
+    await this.repo.save(preinscription);
+
+    if (decisionDto.approved) {
+      await this.conversionService.convertToStudent(id);
+      return this.findOne(id);
+    }
+
+    return this.findOne(id);
   }
 
   /**
@@ -169,17 +424,7 @@ export class PreinscriptionsService {
       );
     }
 
-    const dto: CreateStudentDto = {
-      first_name: pre.first_name,
-      last_name: pre.last_name,
-      email: pre.email,
-      phone: pre.whatsapp_phone,
-      nationality: pre.nationality,
-      city: pre.city,
-      // Other CreateStudentDto fields remain optional / undefined
-    };
-
-    return this.studentsService.create(dto, companyIdFromUser);
+    return this.conversionService.convertToStudent(preinscriptionId);
   }
 
   /**

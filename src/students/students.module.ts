@@ -13,6 +13,7 @@ import { ClassEntity } from '../class/entities/class.entity';
 import { UsersModule } from '../users/users.module';
 import { RolesModule } from '../roles/roles.module';
 import { UserRolesModule } from '../user-roles/user-roles.module';
+import { StudentAccountingModule } from '../student-accounting/student-accounting.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { UserRolesModule } from '../user-roles/user-roles.module';
     UsersModule,
     RolesModule,
     UserRolesModule,
+    StudentAccountingModule,
   ],
   controllers: [StudentsController],
   providers: [StudentsService],

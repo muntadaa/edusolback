@@ -1,34 +1,74 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { StudentPaymentDetailsService } from './student_payment_details.service';
-import { CreateStudentPaymentDetailDto } from './dto/create-student_payment_detail.dto';
-import { UpdateStudentPaymentDetailDto } from './dto/update-student_payment_detail.dto';
+import { StudentPaymentDetailQueryDto } from './dto/student-payment-detail-query.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { StudentAccountingService } from '../student-accounting/student-accounting.service';
 
+@ApiTags('Student Payment Details')
+@ApiBearerAuth()
 @Controller('student-payment-details')
 export class StudentPaymentDetailsController {
-  constructor(private readonly studentPaymentDetailsService: StudentPaymentDetailsService) {}
+  constructor(
+    private readonly studentPaymentDetailsService: StudentPaymentDetailsService,
+    private readonly studentAccountingService: StudentAccountingService,
+  ) {}
 
-  @Post()
-  create(@Body() createStudentPaymentDetailDto: CreateStudentPaymentDetailDto) {
-    return this.studentPaymentDetailsService.create(createStudentPaymentDetailDto);
+  @Post('generate/:studentId')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Generate missing obligations for a student.' })
+  generate(@Request() req, @Param('studentId', ParseIntPipe) studentId: number) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+
+    return this.studentAccountingService.syncStudentObligations(studentId, companyId);
   }
 
   @Get()
-  findAll() {
-    return this.studentPaymentDetailsService.findAll();
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Retrieve ledger lines with balances.' })
+  findAll(@Request() req, @Query() query: StudentPaymentDetailQueryDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+
+    return this.studentPaymentDetailsService.findAll(query, companyId);
+  }
+
+  @Get('summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Retrieve ledger totals summary.' })
+  getSummary(@Request() req, @Query() query: StudentPaymentDetailQueryDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+
+    return this.studentPaymentDetailsService.getSummary(query, companyId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.studentPaymentDetailsService.findOne(+id);
-  }
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Retrieve one ledger line with balances.' })
+  findOne(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateStudentPaymentDetailDto: UpdateStudentPaymentDetailDto) {
-    return this.studentPaymentDetailsService.update(+id, updateStudentPaymentDetailDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.studentPaymentDetailsService.remove(+id);
+    return this.studentPaymentDetailsService.findOne(id, companyId);
   }
 }

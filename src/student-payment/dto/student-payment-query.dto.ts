@@ -23,18 +23,6 @@ export class StudentPaymentQueryDto extends PaginationDto {
   @IsNumber()
   school_year_id?: number;
 
-  @ApiPropertyOptional({ description: 'Filter by level identifier', example: 2 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  level_id?: number;
-
-  @ApiPropertyOptional({ description: 'Filter by level pricing identifier', example: 1 })
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  level_pricing_id?: number;
-
   @ApiPropertyOptional({ description: 'Filter payments made on a specific date', example: '2025-01-10' })
   @IsOptional()
   @IsDateString()

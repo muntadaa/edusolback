@@ -9,6 +9,7 @@ import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
 import { Level } from '../level/entities/level.entity';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
+import { Rubrique } from '../rubrique/entities/rubrique.entity';
 
 @Injectable()
 export class LevelPricingService {
@@ -19,12 +20,14 @@ export class LevelPricingService {
     private readonly levelRepo: Repository<Level>,
     @InjectRepository(SchoolYear)
     private readonly schoolYearRepo: Repository<SchoolYear>,
+    @InjectRepository(Rubrique)
+    private readonly rubriqueRepo: Repository<Rubrique>,
   ) {}
 
-  async create(dto: CreateLevelPricingDto, companyId: number): Promise<LevelPricing> {
+  async create(dto: CreateLevelPricingDto, companyId: number): Promise<any> {
     // Verify level exists and belongs to the same company
     const level = await this.levelRepo.findOne({
-      where: { id: dto.level_id, company_id: companyId },
+      where: { id: dto.level_id, company_id: companyId, status: Not(-2) },
     });
     if (!level) {
       throw new BadRequestException('Level not found or does not belong to your company');
@@ -38,14 +41,18 @@ export class LevelPricingService {
       throw new BadRequestException('School year not found or does not belong to your company');
     }
 
+    const rubrique = await this.resolveRubrique(dto.rubrique_id, companyId);
+    this.ensurePricingSource(dto, rubrique);
+
     // Always set company_id from authenticated user
     const entity = this.repo.create({
       ...dto,
+      rubrique_id: rubrique?.id ?? null,
       company_id: companyId,
       status: dto.status ?? 2,
-      occurrences: dto.occurrences ?? 1,
-      every_month: dto.every_month ?? 0,
-      vat_rate: dto.vat_rate ?? 0,
+      occurrences: dto.occurrences ?? null,
+      every_month: dto.every_month ?? null,
+      vat_rate: dto.vat_rate ?? null,
     });
 
     const saved = await this.repo.save(entity);
@@ -55,12 +62,12 @@ export class LevelPricingService {
   async createMany(
     dtos: CreateLevelPricingDto[],
     companyId: number,
-  ): Promise<LevelPricing[]> {
+  ): Promise<any[]> {
     if (!dtos || dtos.length === 0) {
       throw new BadRequestException('At least one level pricing is required');
     }
 
-    const created: LevelPricing[] = [];
+    const created: any[] = [];
     for (const dto of dtos) {
       const pricing = await this.create(dto, companyId);
       created.push(pricing);
@@ -68,13 +75,15 @@ export class LevelPricingService {
     return created;
   }
 
-  async findAll(query: LevelPricingQueryDto, companyId: number): Promise<PaginatedResponseDto<LevelPricing>> {
+  async findAll(query: LevelPricingQueryDto, companyId: number): Promise<PaginatedResponseDto<any>> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
 
     const qb = this.repo
       .createQueryBuilder('pricing')
       .leftJoinAndSelect('pricing.level', 'level')
+      .leftJoinAndSelect('pricing.schoolYear', 'schoolYear')
+      .leftJoinAndSelect('pricing.rubrique', 'rubrique')
       .leftJoinAndSelect('pricing.company', 'company')
       .where('pricing.status <> :deletedStatus', { deletedStatus: -2 })
       .orderBy('pricing.created_at', 'DESC')
@@ -98,31 +107,44 @@ export class LevelPricingService {
     }
 
     if (query.search) {
-      qb.andWhere('pricing.title LIKE :search', { search: `%${query.search}%` });
+      qb.andWhere('(pricing.title LIKE :search OR rubrique.title LIKE :search)', {
+        search: `%${query.search}%`,
+      });
     }
 
     const [data, total] = await qb.getManyAndCount();
-    return PaginationService.createResponse(data, page, limit, total);
+    return PaginationService.createResponse(
+      data.map((pricing) => this.withEffectiveFields(pricing)),
+      page,
+      limit,
+      total,
+    );
   }
 
-  async findOne(id: number, companyId: number): Promise<LevelPricing> {
+  async findOne(id: number, companyId: number): Promise<any> {
     const pricing = await this.repo.findOne({
       where: { id, company_id: companyId, status: Not(-2) },
-      relations: ['level', 'company'],
+      relations: ['level', 'schoolYear', 'rubrique', 'company'],
     });
     if (!pricing) {
       throw new NotFoundException('Level pricing not found');
     }
-    return pricing;
+    return this.withEffectiveFields(pricing);
   }
 
-  async update(id: number, dto: UpdateLevelPricingDto, companyId: number): Promise<LevelPricing> {
-    const existing = await this.findOne(id, companyId);
+  async update(id: number, dto: UpdateLevelPricingDto, companyId: number): Promise<any> {
+    const existing = await this.repo.findOne({
+      where: { id, company_id: companyId, status: Not(-2) },
+      relations: ['level', 'schoolYear', 'rubrique', 'company'],
+    });
+    if (!existing) {
+      throw new NotFoundException('Level pricing not found');
+    }
 
     // If level_id is being updated, verify it belongs to the same company
     if (dto.level_id !== undefined) {
       const level = await this.levelRepo.findOne({
-        where: { id: dto.level_id, company_id: companyId },
+        where: { id: dto.level_id, company_id: companyId, status: Not(-2) },
       });
       if (!level) {
         throw new BadRequestException('Level not found or does not belong to your company');
@@ -139,6 +161,19 @@ export class LevelPricingService {
       }
     }
 
+    const nextRubriqueId =
+      dto.rubrique_id === undefined ? existing.rubrique_id : dto.rubrique_id ?? undefined;
+    const rubrique = await this.resolveRubrique(nextRubriqueId, companyId);
+
+    this.ensurePricingSource(
+      {
+        title: dto.title ?? existing.title ?? undefined,
+        amount: dto.amount ?? (existing.amount ?? undefined),
+        rubrique_id: rubrique?.id,
+      } as CreateLevelPricingDto,
+      rubrique,
+    );
+
     // Prevent changing company_id - always use authenticated user's company
     const dtoWithoutCompany = { ...dto };
     delete (dtoWithoutCompany as any).company_id;
@@ -147,14 +182,68 @@ export class LevelPricingService {
     // Ensure company_id remains from authenticated user
     merged.company_id = companyId;
     merged.company = { id: companyId } as any;
+    merged.rubrique_id = rubrique?.id ?? null;
+    merged.rubrique = rubrique ?? null;
 
     await this.repo.save(merged);
     return this.findOne(id, companyId);
   }
 
   async remove(id: number, companyId: number): Promise<void> {
-    const existing = await this.findOne(id, companyId);
+    const existing = await this.repo.findOne({
+      where: { id, company_id: companyId, status: Not(-2) },
+    });
+    if (!existing) {
+      throw new NotFoundException('Level pricing not found');
+    }
     existing.status = -2;
     await this.repo.save(existing);
+  }
+
+  private async resolveRubrique(
+    rubriqueId: number | null | undefined,
+    companyId: number,
+  ): Promise<Rubrique | null> {
+    if (!rubriqueId) {
+      return null;
+    }
+
+    const rubrique = await this.rubriqueRepo.findOne({
+      where: { id: rubriqueId, company_id: companyId, status: Not(-2) },
+    });
+
+    if (!rubrique) {
+      throw new BadRequestException('Rubrique not found or does not belong to your company');
+    }
+
+    return rubrique;
+  }
+
+  private ensurePricingSource(dto: CreateLevelPricingDto, rubrique: Rubrique | null): void {
+    if (rubrique) {
+      return;
+    }
+
+    if (!dto.title || dto.amount === undefined || dto.amount === null) {
+      throw new BadRequestException('Either rubrique_id or both title and amount are required');
+    }
+  }
+
+  private withEffectiveFields(pricing: LevelPricing): any {
+    const effectiveAmount = Number(pricing.amount ?? pricing.rubrique?.amount ?? 0);
+    const effectiveVatRate = pricing.vat_rate ?? pricing.rubrique?.vat_rate ?? 0;
+    const effectiveAmountTtc = Number(
+      (effectiveAmount * (1 + effectiveVatRate / 100)).toFixed(2),
+    );
+
+    return {
+      ...pricing,
+      effective_title: pricing.title ?? pricing.rubrique?.title ?? null,
+      effective_amount: effectiveAmount,
+      effective_vat_rate: effectiveVatRate,
+      effective_amount_ttc: effectiveAmountTtc,
+      effective_occurrences: pricing.occurrences ?? pricing.rubrique?.occurrences ?? 1,
+      effective_every_month: pricing.every_month ?? pricing.rubrique?.every_month ?? 0,
+    };
   }
 }

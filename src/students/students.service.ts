@@ -22,6 +22,7 @@ import { ClassEntity } from '../class/entities/class.entity';
 import { UsersService } from '../users/users.service';
 import { RolesService } from '../roles/roles.service';
 import { UserRolesService } from '../user-roles/user-roles.service';
+import { StudentAccountingService } from '../student-accounting/student-accounting.service';
 
 @Injectable()
 export class StudentsService {
@@ -48,6 +49,7 @@ export class StudentsService {
     private usersService: UsersService,
     private rolesService: RolesService,
     private userRolesService: UserRolesService,
+    private studentAccountingService: StudentAccountingService,
   ) {}
 
   async create(createStudentDto: CreateStudentDto, companyId: number): Promise<Student> {
@@ -594,6 +596,11 @@ export class StudentsService {
     }
 
     await this.studentRepository.save(merged);
+
+    if (merged.status === 1) {
+      await this.studentAccountingService.syncStudentObligations(id, companyId);
+    }
+
     return this.findOne(id, companyId); // Return with relations loaded
   }
 

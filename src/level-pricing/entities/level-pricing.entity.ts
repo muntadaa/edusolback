@@ -12,6 +12,7 @@ import { Level } from '../../level/entities/level.entity';
 import { Company } from '../../company/entities/company.entity';
 import { StudentPayment } from '../../student-payment/entities/student-payment.entity';
 import { SchoolYear } from '../../school-years/entities/school-year.entity';
+import { Rubrique } from '../../rubrique/entities/rubrique.entity';
 
 @Entity('level_pricings')
 export class LevelPricing {
@@ -32,20 +33,27 @@ export class LevelPricing {
   @JoinColumn({ name: 'school_year_id' })
   schoolYear: SchoolYear;
 
-  @Column({ length: 150 })
-  title: string;
+  @Column({ type: 'int', nullable: true })
+  rubrique_id: number | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
-  amount: number;
+  @ManyToOne(() => Rubrique, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'rubrique_id' })
+  rubrique: Rubrique | null;
 
-  @Column({ type: 'int', default: 0 })
-  vat_rate: number;
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  title: string | null;
 
-  @Column({ type: 'int', default: 1 })
-  occurrences: number;
+  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  amount: number | null;
 
-  @Column({ type: 'tinyint', default: 0 })
-  every_month: number;
+  @Column({ type: 'int', nullable: true })
+  vat_rate: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  occurrences: number | null;
+
+  @Column({ type: 'tinyint', nullable: true })
+  every_month: number | null;
 
   @Column()
   company_id: number;
@@ -56,9 +64,6 @@ export class LevelPricing {
 
   @Column({ type: 'int', default: 2, name: 'statut' })
   status: number;
-
-  @OneToMany(() => StudentPayment, payment => payment.levelPricing)
-  payments: StudentPayment[];
 
   @CreateDateColumn()
   created_at: Date;

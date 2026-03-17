@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException, ParseIntPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
 import { PreinscriptionsService } from './preinscriptions.service';
 import { CreatePreinscriptionDto } from './dto/create-preinscription.dto';
@@ -6,6 +6,8 @@ import { UpdatePreinscriptionDto } from './dto/update-preinscription.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PreinscriptionsQueryDto } from './dto/preinscriptions-query.dto';
 import { SyncManyPreinscriptionsDto } from './dto/sync-many-preinscriptions.dto';
+import { AdminDecisionDto } from './dto/admin-decision.dto';
+import { CommercialEvaluationDto } from './dto/commercial-evaluation.dto';
 
 @ApiTags('Preinscriptions')
 @ApiBearerAuth()
@@ -85,6 +87,21 @@ export class PreinscriptionsController {
     return this.preinscriptionsService.findAllByCompany(query, companyId);
   }
 
+  @Get('eligible-commercial-users')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 200,
+    description:
+      'List users eligible for commercial assignment (have page access to /preinscriptions/commercial).',
+  })
+  getEligibleCommercialUsers(@Request() req) {
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.preinscriptionsService.getEligibleCommercialUsers(companyId);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiResponse({ status: 200, description: 'Get a single pre-inscription by id.' })
@@ -105,6 +122,46 @@ export class PreinscriptionsController {
       throw new BadRequestException('User must belong to a company');
     }
     return this.preinscriptionsService.updateByCompany(+id, companyId, updatePreinscriptionDto);
+  }
+
+  @Patch(':id/assign-commercial')
+  @ApiResponse({ status: 200, description: 'Assign a commercial agent to this pre-inscription.' })
+  assignCommercial(
+    @Param('id') id: string,
+    @Body() body: { commercialId: number },
+  ) {
+    return this.preinscriptionsService.assignCommercial(+id, body.commercialId);
+  }
+
+  @Patch(':id/commercial-evaluation')
+  @ApiResponse({ status: 200, description: 'Update commercial evaluation fields and move to COMMERCIAL_REVIEW.' })
+  updateCommercialEvaluation(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CommercialEvaluationDto,
+  ) {
+    return this.preinscriptionsService.updateCommercialEvaluation(id, dto);
+  }
+
+  /**
+   * Used by Commercial when evaluation is finished.
+   * Modifies state (workflow transition).
+   */
+  @Patch(':id/submit')
+  @ApiResponse({ status: 200, description: 'Submit pre-inscription to administration for decision.' })
+  submitToAdministration(@Param('id', ParseIntPipe) id: number) {
+    return this.preinscriptionsService.submitToAdministration(id);
+  }
+
+  /**
+   * Used by Administrator.
+   */
+  @Patch(':id/admin-decision')
+  @ApiResponse({ status: 200, description: 'Admin decision: approve or reject the pre-inscription.' })
+  adminDecision(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminDecisionDto,
+  ) {
+    return this.preinscriptionsService.adminDecision(id, dto);
   }
 
   @Delete(':id')

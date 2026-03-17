@@ -1,17 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, MaxLength, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, MaxLength, Min, ValidateIf } from 'class-validator';
 
 export class CreateLevelPricingDto {
   @ApiProperty({ description: 'Level identifier this pricing is linked to', example: 2 })
   @Type(() => Number)
   @IsNumber()
   level_id: number;
-
-  @ApiProperty({ description: 'Pricing title', example: 'Monthly Plan' })
-  @IsString()
-  @MaxLength(150)
-  title: string;
 
   @ApiProperty({
     description: 'School year identifier this pricing is linked to',
@@ -21,11 +16,35 @@ export class CreateLevelPricingDto {
   @IsNumber()
   school_year_id: number;
 
-  @ApiProperty({ description: 'Total amount for this plan', example: 500 })
+  @ApiPropertyOptional({
+    description: 'Rubrique identifier used as the master fee definition',
+    example: 12,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  rubrique_id?: number;
+
+  @ApiPropertyOptional({
+    description: 'Optional pricing title override. If omitted, the rubrique title is used.',
+    example: 'Monthly Plan',
+  })
+  @ValidateIf((o) => !o.rubrique_id || o.title !== undefined)
+  @IsString()
+  @MaxLength(150)
+  @IsOptional()
+  title?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional amount override. If omitted, the rubrique amount is used.',
+    example: 500,
+  })
+  @ValidateIf((o) => !o.rubrique_id || o.amount !== undefined)
   @Type(() => Number)
   @IsNumber()
   @IsPositive()
-  amount: number;
+  @IsOptional()
+  amount?: number;
 
   @ApiPropertyOptional({
     description: 'VAT rate in percent',

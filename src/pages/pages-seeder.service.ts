@@ -68,6 +68,7 @@ export class PagesSeederService implements OnModuleInit {
       { route: '/student-reports', title: 'Student Reports' },
       { route: '/student-report-details', title: 'Student Report Details' },
       { route: '/student-payments', title: 'Student Payments' },
+      { route: '/student-finance', title: 'Student Finance' },
       { route: '/level-pricings', title: 'Level Pricings' },
       { route: '/student-attestations', title: 'Student Attestations' },
       { route: '/attestations', title: 'Attestations' },
@@ -76,6 +77,9 @@ export class PagesSeederService implements OnModuleInit {
       { route: '/student-link-types', title: 'Student Link Types' },
       { route: '/student-notes', title: 'Student Notes' },
       { route: '/preinscriptions', title: 'Pre-inscriptions' },
+      { route: '/preinscriptions/assignment', title: 'Pre-inscriptions Assignment' },
+      { route: '/preinscriptions/commercial', title: 'Pre-inscriptions Commercial' },
+      { route: '/preinscriptions/admin', title: 'Pre-inscriptions Admin' },
     ];
 
     // Optimized: Get all existing pages in one query

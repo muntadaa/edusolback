@@ -17,6 +17,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AdminOnlyGuard } from './guards/admin-only.guard';
 import { RouteAccessGuard } from './guards/route-access.guard';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { StudentAccountingModule } from '../student-accounting/student-accounting.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     MailModule,
     PagesModule,
     CaptchaModule,
+    StudentAccountingModule,
     PassportModule,
     TypeOrmModule.forFeature([Student, Teacher, Page, RolePage]),
     JwtModule.registerAsync({

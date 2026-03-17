@@ -8,6 +8,7 @@ import { ClassStudentQueryDto } from './dto/class-student-query.dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
 import { ClassEntity } from '../class/entities/class.entity';
+import { StudentAccountingService } from '../student-accounting/student-accounting.service';
 
 @Injectable()
 export class ClassStudentService {
@@ -16,6 +17,7 @@ export class ClassStudentService {
     private readonly repo: Repository<ClassStudent>,
     @InjectRepository(ClassEntity)
     private readonly classRepo: Repository<ClassEntity>,
+    private readonly studentAccountingService: StudentAccountingService,
   ) {}
 
   /**
@@ -77,6 +79,8 @@ export class ClassStudentService {
 
     try {
       const saved = await this.repo.save(entity);
+      // Do NOT generate payment details here. Details are generated only when the student
+      // is activated (status = 1) via PATCH /api/students/:id or set-password flow.
       return this.findOne(saved.id, companyId);
     } catch (error) {
       throw new BadRequestException('Failed to assign student to class');
@@ -168,6 +172,7 @@ export class ClassStudentService {
     merged.company = { id: companyId } as any;
 
     await this.repo.save(merged);
+    await this.studentAccountingService.syncFromClassStudent(id, companyId);
 
     return this.findOne(id, companyId);
   }

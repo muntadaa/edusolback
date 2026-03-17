@@ -34,6 +34,21 @@ export class StudentPaymentController {
     return this.studentPaymentService.findAll(query, companyId);
   }
 
+  @Get('summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Payment totals for a student in a school year (to cap amount input).' })
+  getPaymentSummary(
+    @Request() req,
+    @Query('student_id', ParseIntPipe) studentId: number,
+    @Query('school_year_id', ParseIntPipe) schoolYearId: number,
+  ) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.studentPaymentService.getPaymentSummary(studentId, schoolYearId, companyId);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiResponse({ status: 200, description: 'Retrieve a student payment by identifier.' })

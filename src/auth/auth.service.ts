@@ -15,6 +15,7 @@ import { Page } from '../pages/entities/page.entity';
 import { RolePage } from '../pages/entities/role-page.entity';
 import { LoginDto, RegisterDto, ForgotPasswordDto, ResetPasswordDto, ResetPasswordWithTokenDto, ChangePasswordDto, SetPasswordDto, ValidateTokenDto } from './dto/auth.dto';
 import { SetupAdminDto } from './dto/setup-admin.dto';
+import { StudentAccountingService } from '../student-accounting/student-accounting.service';
 
 @Injectable()
 export class AuthService {
@@ -37,6 +38,7 @@ export class AuthService {
     @InjectRepository(RolePage)
     private rolePageRepository: Repository<RolePage>,
     private dataSource: DataSource,
+    private studentAccountingService: StudentAccountingService,
   ) { }
 
   async login(loginDto: LoginDto) {
@@ -309,38 +311,34 @@ export class AuthService {
 
     const user = await this.usersService.setPasswordWithToken(setPasswordDto.token, setPasswordDto.password);
 
-    // If user has student role, also update student status to active (1)
-    const hasStudentRole = user.userRoles?.some(ur => ur.role.code === 'student');
-    if (hasStudentRole) {
-      try {
-        const student = await this.studentRepository.findOne({
-          where: { email: user.email },
-        });
-        if (student) {
-          student.status = 1; // Set to active
-          await this.studentRepository.save(student);
-        }
-      } catch (error) {
-        // Log error but don't fail password setting
-        console.error('Failed to update student status:', error);
+    // Activate linked Student record (if any).
+    // Do NOT depend on user.userRoles being loaded here.
+    try {
+      const student = await this.studentRepository.findOne({
+        where: { email: user.email, company_id: user.company_id },
+      });
+      if (student) {
+        student.status = 1;
+        await this.studentRepository.save(student);
+        await this.studentAccountingService.syncStudentObligations(student.id, student.company_id);
       }
+    } catch (error) {
+      // Log error but don't fail password setting
+      console.error('Failed to update student status:', error);
     }
 
-    // If user has teacher role, also update teacher status to active (1)
-    const hasTeacherRole = user.userRoles?.some(ur => ur.role.code === 'teacher');
-    if (hasTeacherRole) {
-      try {
-        const teacher = await this.teacherRepository.findOne({
-          where: { email: user.email },
-        });
-        if (teacher) {
-          teacher.status = 1; // Set to active
-          await this.teacherRepository.save(teacher);
-        }
-      } catch (error) {
-        // Log error but don't fail password setting
-        console.error('Failed to update teacher status:', error);
+    // Activate linked Teacher record (if any).
+    try {
+      const teacher = await this.teacherRepository.findOne({
+        where: { email: user.email, company_id: user.company_id },
+      });
+      if (teacher) {
+        teacher.status = 1;
+        await this.teacherRepository.save(teacher);
       }
+    } catch (error) {
+      // Log error but don't fail password setting
+      console.error('Failed to update teacher status:', error);
     }
 
     return { message: 'Password has been set successfully. You can now login.' };
