@@ -8,6 +8,7 @@ import { LevelPricing } from '../level-pricing/entities/level-pricing.entity';
 import { StudentPaymentDetail } from '../student_payment_details/entities/student_payment_detail.entity';
 import { StudentPayment } from '../student-payment/entities/student-payment.entity';
 import { StudentPaymentAllocationsService } from '../student_payment_allocations/student_payment_allocations.service';
+import { SchoolYear } from '../school-years/entities/school-year.entity';
 
 @Injectable()
 export class StudentAccountingService {
@@ -18,6 +19,8 @@ export class StudentAccountingService {
     private readonly classStudentRepo: Repository<ClassStudent>,
     @InjectRepository(ClassEntity)
     private readonly classRepo: Repository<ClassEntity>,
+    @InjectRepository(SchoolYear)
+    private readonly schoolYearRepo: Repository<SchoolYear>,
     @InjectRepository(LevelPricing)
     private readonly levelPricingRepo: Repository<LevelPricing>,
     @InjectRepository(StudentPaymentDetail)
@@ -51,7 +54,7 @@ export class StudentAccountingService {
       .where('cs.student_id = :studentId', { studentId })
       .andWhere('cs.company_id = :companyId', { companyId })
       .andWhere('cs.status <> :deletedStatus', { deletedStatus: -2 })
-      .andWhere('class.status <> :deletedStatus', { deletedStatus: -2 })
+      .andWhere('(cs.class_id IS NULL OR class.status <> :deletedStatus)', { deletedStatus: -2 })
       .orderBy('class.school_year_id', 'ASC')
       .addOrderBy('cs.id', 'ASC')
       .getMany();
@@ -89,10 +92,6 @@ export class StudentAccountingService {
       };
     }
 
-    if (!assignment.class || assignment.class.status === -2) {
-      throw new BadRequestException('Class is not available for obligation generation');
-    }
-
     const generatedCount = await this.generateFromAssignment(
       assignment,
       assignment.student,
@@ -114,22 +113,107 @@ export class StudentAccountingService {
     student: Student,
     companyId: number,
   ): Promise<number> {
-    if (!assignment.class) {
-      const classEntity = await this.classRepo.findOne({
-        where: { id: assignment.class_id, company_id: companyId, status: Not(-2) },
-        relations: ['schoolYear'],
-      });
-      if (!classEntity) {
-        return 0;
+    // If assignment has a class, ensure it's loaded and usable
+    if (assignment.class_id) {
+      if (!assignment.class) {
+        const classEntity = await this.classRepo.findOne({
+          where: { id: assignment.class_id, company_id: companyId, status: Not(-2) },
+          relations: ['schoolYear'],
+        });
+        if (!classEntity) {
+          return 0;
+        }
+        assignment.class = classEntity;
       }
-      assignment.class = classEntity;
+
+      const levelPricings = await this.levelPricingRepo.find({
+        where: {
+          company_id: companyId,
+          level_id: assignment.class.level_id,
+          school_year_id: assignment.class.school_year_id,
+          status: Not(-2),
+        },
+        relations: ['rubrique'],
+        order: { id: 'ASC' },
+      });
+
+      let generatedCount = 0;
+
+      for (const pricing of levelPricings) {
+        const effectiveTitle = pricing.title ?? pricing.rubrique?.title ?? null;
+        const effectiveAmount = Number(pricing.amount ?? pricing.rubrique?.amount ?? 0);
+        const effectiveVatRate = pricing.vat_rate ?? pricing.rubrique?.vat_rate ?? 0;
+        const effectiveOccurrences = Math.max(
+          pricing.occurrences ?? pricing.rubrique?.occurrences ?? 1,
+          1,
+        );
+        const effectiveEveryMonth = pricing.every_month ?? pricing.rubrique?.every_month ?? 0;
+
+        if (!effectiveTitle || effectiveAmount <= 0) {
+          continue;
+        }
+
+        for (let occurrenceIndex = 1; occurrenceIndex <= effectiveOccurrences; occurrenceIndex += 1) {
+          const lineKey = this.buildLineKey(student.id, pricing.id, occurrenceIndex);
+          const existingDetail = await this.detailRepo.findOne({
+            where: { line_key: lineKey, company_id: companyId },
+          });
+
+          if (existingDetail) {
+            continue;
+          }
+
+          const dueDate = this.computeDueDate(
+            assignment.class.schoolYear?.start_date ?? new Date(),
+            effectiveEveryMonth === 1 ? occurrenceIndex - 1 : 0,
+          );
+
+          const detail = this.detailRepo.create({
+            line_key: lineKey,
+            student_id: student.id,
+            school_year_id: assignment.class.school_year_id,
+            level_id: assignment.class.level_id,
+            class_id: assignment.class.id,
+            level_pricing_id: pricing.id,
+            rubrique_id: pricing.rubrique_id ?? null,
+            source_type: 'level_pricing',
+            source_reference_id: pricing.id,
+            title: effectiveTitle,
+            amount_ht: effectiveAmount,
+            vat_rate: effectiveVatRate,
+            amount_ttc: this.computeAmountTtc(effectiveAmount, effectiveVatRate),
+            occurrence_index: occurrenceIndex,
+            occurrences: effectiveOccurrences,
+            every_month: effectiveEveryMonth,
+            due_date: dueDate,
+            period_label: this.buildPeriodLabel(dueDate, occurrenceIndex, effectiveOccurrences, effectiveEveryMonth),
+            company_id: companyId,
+            status: 1,
+          });
+
+          await this.detailRepo.save(detail);
+          generatedCount += 1;
+        }
+      }
+
+      return generatedCount;
     }
+
+    // No class: generate based on assignment's level_id + school_year_id (class_id in details stays null)
+    if (!assignment.level_id || !assignment.school_year_id) {
+      return 0;
+    }
+
+    const schoolYear = await this.schoolYearRepo.findOne({
+      where: { id: assignment.school_year_id, company_id: companyId, status: Not(-2) },
+    });
+    const baseStartDate = schoolYear?.start_date ?? new Date();
 
     const levelPricings = await this.levelPricingRepo.find({
       where: {
         company_id: companyId,
-        level_id: assignment.class.level_id,
-        school_year_id: assignment.class.school_year_id,
+        level_id: assignment.level_id,
+        school_year_id: assignment.school_year_id,
         status: Not(-2),
       },
       relations: ['rubrique'],
@@ -163,16 +247,16 @@ export class StudentAccountingService {
         }
 
         const dueDate = this.computeDueDate(
-          assignment.class.schoolYear?.start_date ?? new Date(),
+          baseStartDate,
           effectiveEveryMonth === 1 ? occurrenceIndex - 1 : 0,
         );
 
         const detail = this.detailRepo.create({
           line_key: lineKey,
           student_id: student.id,
-          school_year_id: assignment.class.school_year_id,
-          level_id: assignment.class.level_id,
-          class_id: assignment.class.id,
+          school_year_id: assignment.school_year_id,
+          level_id: assignment.level_id,
+          class_id: null,
           level_pricing_id: pricing.id,
           rubrique_id: pricing.rubrique_id ?? null,
           source_type: 'level_pricing',

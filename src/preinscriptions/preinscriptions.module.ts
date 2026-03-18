@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PreinscriptionsService } from './preinscriptions.service';
 import { PreinscriptionsController } from './preinscriptions.controller';
 import { PreInscription } from './entities/preinscription.entity';
+import { PreinscriptionMeeting } from './entities/preinscription-meeting.entity';
 import { Company } from '../company/entities/company.entity';
 import { StudentsModule } from '../students/students.module';
 import { Level } from '../level/entities/level.entity';
@@ -22,6 +23,7 @@ import { Page } from '../pages/entities/page.entity';
   imports: [
     TypeOrmModule.forFeature([
       PreInscription,
+      PreinscriptionMeeting,
       Company,
       Level,
       PreInscriptionDiploma,

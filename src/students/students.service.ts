@@ -496,12 +496,26 @@ export class StudentsService {
       };
     }
 
+    // class_id can be null now (class-student can represent an assignment without a class)
+    if (!classStudent.class_id) {
+      return {
+        student: {
+          id: student.id,
+          first_name: student.first_name,
+          last_name: student.last_name,
+          email: student.email,
+          birthday: student.birthday || undefined,
+        },
+        class: null,
+      };
+    }
+
     // Get the class with nested relations: specialization, level, schoolYear
     const classEntity = await this.classRepository.findOne({
-      where: { 
-        id: classStudent.class_id, 
-        company_id: companyId, 
-        status: Not(-2) 
+      where: {
+        id: classStudent.class_id,
+        company_id: companyId,
+        status: Not(-2),
       },
       relations: ['specialization', 'level', 'schoolYear'],
     });
@@ -544,6 +558,55 @@ export class StudentsService {
           title: classEntity.schoolYear.title,
         } : null,
       },
+    };
+  }
+
+  /**
+   * Returns student current data + academic context (program/specialization/level/schoolYear)
+   * derived from the latest class_students row (even if class_id is null).
+   */
+  async findOneWithAcademic(id: number, companyId: number) {
+    const student = await this.studentRepository.findOne({
+      where: { id, company_id: companyId, status: Not(-2) },
+    });
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const classStudent = await this.classStudentRepository.findOne({
+      where: {
+        student_id: id,
+        company_id: companyId,
+        status: Not(-2),
+      },
+      relations: ['program', 'specialization', 'level', 'schoolYear'],
+      order: {
+        tri: 'DESC',
+        created_at: 'DESC',
+      },
+    });
+
+    return {
+      student,
+      academic: classStudent
+        ? {
+            program: classStudent.program
+              ? { id: classStudent.program.id, title: classStudent.program.title }
+              : null,
+            specialization: classStudent.specialization
+              ? {
+                  id: classStudent.specialization.id,
+                  title: classStudent.specialization.title,
+                }
+              : null,
+            level: classStudent.level
+              ? { id: classStudent.level.id, title: classStudent.level.title }
+              : null,
+            schoolYear: classStudent.schoolYear
+              ? { id: classStudent.schoolYear.id, title: classStudent.schoolYear.title }
+              : null,
+          }
+        : null,
     };
   }
 

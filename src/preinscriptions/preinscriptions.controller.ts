@@ -8,6 +8,9 @@ import { PreinscriptionsQueryDto } from './dto/preinscriptions-query.dto';
 import { SyncManyPreinscriptionsDto } from './dto/sync-many-preinscriptions.dto';
 import { AdminDecisionDto } from './dto/admin-decision.dto';
 import { CommercialEvaluationDto } from './dto/commercial-evaluation.dto';
+import { AssignCommercialBulkDto } from './dto/assign-commercial-bulk.dto';
+import { CreatePreinscriptionMeetingDto } from './dto/create-preinscription-meeting.dto';
+import { UpdatePreinscriptionMeetingDto } from './dto/update-preinscription-meeting.dto';
 
 @ApiTags('Preinscriptions')
 @ApiBearerAuth()
@@ -125,12 +128,82 @@ export class PreinscriptionsController {
   }
 
   @Patch(':id/assign-commercial')
+  @UseGuards(JwtAuthGuard)
   @ApiResponse({ status: 200, description: 'Assign a commercial agent to this pre-inscription.' })
   assignCommercial(
+    @Request() req,
     @Param('id') id: string,
     @Body() body: { commercialId: number },
   ) {
+    const companyId = req.user?.company_id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
     return this.preinscriptionsService.assignCommercial(+id, body.commercialId);
+  }
+
+  @Post('assign-commercial-bulk')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 201,
+    description:
+      'Assign one commercial to multiple pre-inscriptions. Returns assigned ids and per-id failures.',
+  })
+  assignCommercialBulk(@Request() req, @Body() dto: AssignCommercialBulkDto) {
+    const companyId = req.user?.company_id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    return this.preinscriptionsService.assignCommercialBulk(
+      dto.commercialId,
+      dto.preinscriptionIds,
+      companyId,
+    );
+  }
+
+  @Get(':id/meetings')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'List all meetings for this pre-inscription (date + notes).' })
+  getMeetings(@Request() req, @Param('id', ParseIntPipe) id: number) {
+    const companyId = req.user?.company_id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    return this.preinscriptionsService.findMeetingsByPreinscription(id, companyId);
+  }
+
+  @Post(':id/meetings')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 201, description: 'Add a meeting (date + meeting notes) for this pre-inscription.' })
+  createMeeting(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreatePreinscriptionMeetingDto,
+  ) {
+    const companyId = req.user?.company_id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    return this.preinscriptionsService.createMeeting(id, companyId, dto);
+  }
+
+  @Patch(':id/meetings/:meetingId')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Update a meeting (date and/or notes).' })
+  updateMeeting(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('meetingId', ParseIntPipe) meetingId: number,
+    @Body() dto: UpdatePreinscriptionMeetingDto,
+  ) {
+    const companyId = req.user?.company_id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    return this.preinscriptionsService.updateMeeting(id, meetingId, companyId, dto);
+  }
+
+  @Delete(':id/meetings/:meetingId')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Delete a meeting.' })
+  removeMeeting(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('meetingId', ParseIntPipe) meetingId: number,
+  ) {
+    const companyId = req.user?.company_id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    return this.preinscriptionsService.removeMeeting(id, meetingId, companyId);
   }
 
   @Patch(':id/commercial-evaluation')

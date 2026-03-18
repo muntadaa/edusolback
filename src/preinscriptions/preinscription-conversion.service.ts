@@ -8,6 +8,7 @@ import { StudentDiplome } from '../student-diplome/entities/student-diplome.enti
 import { StudentPaymentDetail } from '../student_payment_details/entities/student_payment_detail.entity';
 import { LevelPricing } from '../level-pricing/entities/level-pricing.entity';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
+import { ClassStudent } from '../class-student/entities/class-student.entity';
 import { canTransition } from './workflow/preinscription.workflow';
 import { User } from '../users/entities/user.entity';
 import { Role } from '../roles/entities/role.entity';
@@ -90,9 +91,49 @@ export class PreInscriptionConversionService {
         await manager.save(StudentDiplome, studentDiplome);
       }
 
+      // Create a class_students row for the new student (no class yet: class_id stays null).
+      if (
+        preinscription.final_program_id &&
+        preinscription.final_specialization_id &&
+        preinscription.final_level_id &&
+        preinscription.final_school_year_id
+      ) {
+        const existingAssignment = await manager.findOne(ClassStudent, {
+          where: {
+            student_id: savedStudent.id,
+            company_id: preinscription.company_id,
+            school_year_id: preinscription.final_school_year_id,
+            status: Not(-2),
+          } as any,
+        });
+
+        if (!existingAssignment) {
+          const assignment = manager.create(ClassStudent, {
+            student_id: savedStudent.id,
+            class_id: null,
+            company_id: preinscription.company_id,
+            program_id: preinscription.final_program_id,
+            specialization_id: preinscription.final_specialization_id,
+            level_id: preinscription.final_level_id,
+            school_year_id: preinscription.final_school_year_id,
+            status: 1,
+            tri: 1,
+          });
+          await manager.save(ClassStudent, assignment);
+        }
+      }
+
       // Generate student payment details from level pricing based on final_level_id.
       if (preinscription.final_level_id) {
-        const schoolYear = await this.resolveTargetSchoolYear(manager, preinscription.company_id);
+        const schoolYear = preinscription.final_school_year_id
+          ? await manager.findOne(SchoolYear, {
+              where: {
+                id: preinscription.final_school_year_id,
+                company_id: preinscription.company_id,
+                status: Not(-2),
+              },
+            })
+          : await this.resolveTargetSchoolYear(manager, preinscription.company_id);
         if (schoolYear) {
           await this.generateDetailsFromFinalLevel(
             manager,

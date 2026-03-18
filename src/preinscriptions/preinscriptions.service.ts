@@ -17,16 +17,24 @@ import { User } from '../users/entities/user.entity';
 import { UserRole } from '../user-roles/entities/user-role.entity';
 import { RolePage } from '../pages/entities/role-page.entity';
 import { Page } from '../pages/entities/page.entity';
+import { PreinscriptionMeeting } from './entities/preinscription-meeting.entity';
+import { CreatePreinscriptionMeetingDto } from './dto/create-preinscription-meeting.dto';
+import { UpdatePreinscriptionMeetingDto } from './dto/update-preinscription-meeting.dto';
+import { SchoolYear } from '../school-years/entities/school-year.entity';
 
 @Injectable()
 export class PreinscriptionsService {
   constructor(
     @InjectRepository(PreInscription)
     private readonly repo: Repository<PreInscription>,
+    @InjectRepository(PreinscriptionMeeting)
+    private readonly meetingRepo: Repository<PreinscriptionMeeting>,
     @InjectRepository(Company)
     private readonly companyRepo: Repository<Company>,
     @InjectRepository(Level)
     private readonly levelRepo: Repository<Level>,
+    @InjectRepository(SchoolYear)
+    private readonly schoolYearRepo: Repository<SchoolYear>,
     @InjectRepository(PreInscriptionDiploma)
     private readonly diplomaRepo: Repository<PreInscriptionDiploma>,
     @InjectRepository(User)
@@ -194,6 +202,64 @@ export class PreinscriptionsService {
     return preinscription;
   }
 
+  async findMeetingsByPreinscription(
+    preinscriptionId: number,
+    companyId: number,
+  ): Promise<PreinscriptionMeeting[]> {
+    await this.findOneByCompany(preinscriptionId, companyId);
+    return this.meetingRepo.find({
+      where: { preinscription_id: preinscriptionId },
+      order: { meeting_at: 'DESC', created_at: 'DESC' },
+    });
+  }
+
+  async createMeeting(
+    preinscriptionId: number,
+    companyId: number,
+    dto: CreatePreinscriptionMeetingDto,
+  ): Promise<PreinscriptionMeeting> {
+    await this.findOneByCompany(preinscriptionId, companyId);
+    const meeting = this.meetingRepo.create({
+      preinscription_id: preinscriptionId,
+      meeting_at: new Date(dto.meeting_at),
+      meeting_notes: dto.meeting_notes ?? null,
+    });
+    return this.meetingRepo.save(meeting);
+  }
+
+  async updateMeeting(
+    preinscriptionId: number,
+    meetingId: number,
+    companyId: number,
+    dto: UpdatePreinscriptionMeetingDto,
+  ): Promise<PreinscriptionMeeting> {
+    await this.findOneByCompany(preinscriptionId, companyId);
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId, preinscription_id: preinscriptionId },
+    });
+    if (!meeting) {
+      throw new NotFoundException(`Meeting with id ${meetingId} not found for this pre-inscription`);
+    }
+    if (dto.meeting_at !== undefined) meeting.meeting_at = new Date(dto.meeting_at);
+    if (dto.meeting_notes !== undefined) meeting.meeting_notes = dto.meeting_notes;
+    return this.meetingRepo.save(meeting);
+  }
+
+  async removeMeeting(
+    preinscriptionId: number,
+    meetingId: number,
+    companyId: number,
+  ): Promise<void> {
+    await this.findOneByCompany(preinscriptionId, companyId);
+    const meeting = await this.meetingRepo.findOne({
+      where: { id: meetingId, preinscription_id: preinscriptionId },
+    });
+    if (!meeting) {
+      throw new NotFoundException(`Meeting with id ${meetingId} not found for this pre-inscription`);
+    }
+    await this.meetingRepo.remove(meeting);
+  }
+
   async update(
     id: number,
     updatePreinscriptionDto: UpdatePreinscriptionDto,
@@ -266,6 +332,63 @@ export class PreinscriptionsService {
     return this.repo.save(preinscription);
   }
 
+  async assignCommercialBulk(
+    commercialId: number,
+    preinscriptionIds: number[],
+    companyId: number,
+  ): Promise<{
+    assigned: number[];
+    failed: Array<{ id: number; reason: string }>;
+  }> {
+    const commercial = await this.userRepo.findOne({
+      where: { id: commercialId, company_id: companyId, status: Not(-2) },
+    });
+    if (!commercial) {
+      throw new NotFoundException('Commercial user not found in this company');
+    }
+    const hasAccess = await this.userHasAccessToRoute(
+      commercialId,
+      companyId,
+      '/preinscriptions/commercial',
+    );
+    if (!hasAccess) {
+      throw new BadRequestException(
+        'Selected user does not have page access to /preinscriptions/commercial',
+      );
+    }
+
+    const assigned: number[] = [];
+    const failed: Array<{ id: number; reason: string }> = [];
+
+    for (const id of preinscriptionIds) {
+      try {
+        const pre = await this.findOne(id);
+        if (pre.company_id !== companyId) {
+          failed.push({ id, reason: 'Pre-inscription does not belong to your company' });
+          continue;
+        }
+        if (!canTransition(pre.status, PreInscriptionStatus.ASSIGNED_TO_COMMERCIAL)) {
+          failed.push({
+            id,
+            reason: `Invalid status: ${pre.status} (must be NEW or ASSIGNED_TO_COMMERCIAL to assign)`,
+          });
+          continue;
+        }
+        pre.commercial_id = commercialId;
+        pre.status = PreInscriptionStatus.ASSIGNED_TO_COMMERCIAL;
+        await this.repo.save(pre);
+        assigned.push(id);
+      } catch (err: any) {
+        failed.push({
+          id,
+          reason: err?.message ?? 'Unknown error',
+        });
+      }
+    }
+
+    return { assigned, failed };
+  }
+
   private async userHasAccessToRoute(
     userId: number,
     companyId: number,
@@ -295,11 +418,11 @@ export class PreinscriptionsService {
   async updateCommercialEvaluation(
     id: number,
     dto: {
-      meeting_notes?: string | null;
       commercial_comment?: string | null;
       proposed_program_id?: number | null;
       proposed_specialization_id?: number | null;
       proposed_level_id?: number | null;
+      proposed_school_year_id?: number | null;
     },
   ): Promise<PreInscription> {
     const preinscription = await this.findOne(id);
@@ -309,9 +432,6 @@ export class PreinscriptionsService {
       );
     }
 
-    if (dto.meeting_notes !== undefined) {
-      preinscription.meeting_notes = dto.meeting_notes;
-    }
     if (dto.commercial_comment !== undefined) {
       preinscription.commercial_comment = dto.commercial_comment;
     }
@@ -323,6 +443,9 @@ export class PreinscriptionsService {
     }
     if (dto.proposed_level_id !== undefined) {
       preinscription.proposed_level_id = dto.proposed_level_id;
+    }
+    if (dto.proposed_school_year_id !== undefined) {
+      preinscription.proposed_school_year_id = dto.proposed_school_year_id;
     }
 
     preinscription.status = PreInscriptionStatus.COMMERCIAL_REVIEW;
@@ -342,6 +465,11 @@ export class PreinscriptionsService {
       throw new BadRequestException('proposed_level_id is required before submitting to administration');
     }
 
+    const proposedSchoolYearId = preinscription.proposed_school_year_id;
+    if (!proposedSchoolYearId) {
+      throw new BadRequestException('proposed_school_year_id is required before submitting to administration');
+    }
+
     const level = await this.levelRepo.findOne({
       where: {
         id: proposedLevelId,
@@ -353,11 +481,29 @@ export class PreinscriptionsService {
       throw new BadRequestException(`proposed_level_id ${proposedLevelId} is invalid`);
     }
 
+    const schoolYear = await this.schoolYearRepo.findOne({
+      where: {
+        id: proposedSchoolYearId,
+        company_id: preinscription.company_id,
+        status: Not(-2),
+      },
+    });
+    if (!schoolYear) {
+      throw new BadRequestException(`proposed_school_year_id ${proposedSchoolYearId} is invalid`);
+    }
+
     const diplomaCount = await this.diplomaRepo.count({
       where: { preinscription_id: preinscription.id },
     });
     if (diplomaCount < 1) {
       throw new BadRequestException('At least one diploma is required before submitting to administration');
+    }
+
+    const meetingCount = await this.meetingRepo.count({
+      where: { preinscription_id: preinscription.id },
+    });
+    if (meetingCount < 1) {
+      throw new BadRequestException('At least one meeting is required before submitting to administration');
     }
 
     preinscription.status = PreInscriptionStatus.SENT_TO_ADMIN;
@@ -371,6 +517,7 @@ export class PreinscriptionsService {
       final_program_id?: number | null;
       final_specialization_id?: number | null;
       final_level_id?: number | null;
+      final_school_year_id?: number | null;
       admin_comment?: string | null;
     },
   ): Promise<PreInscription> {
@@ -393,6 +540,9 @@ export class PreinscriptionsService {
     if (decisionDto.final_level_id !== undefined) {
       preinscription.final_level_id = decisionDto.final_level_id;
     }
+    if (decisionDto.final_school_year_id !== undefined) {
+      preinscription.final_school_year_id = decisionDto.final_school_year_id;
+    }
     if (decisionDto.admin_comment !== undefined) {
       preinscription.admin_comment = decisionDto.admin_comment;
     }
@@ -403,6 +553,12 @@ export class PreinscriptionsService {
     await this.repo.save(preinscription);
 
     if (decisionDto.approved) {
+      if (!preinscription.final_level_id) {
+        throw new BadRequestException('final_level_id is required to approve a pre-inscription');
+      }
+      if (!preinscription.final_school_year_id) {
+        throw new BadRequestException('final_school_year_id is required to approve a pre-inscription');
+      }
       await this.conversionService.convertToStudent(id);
       return this.findOne(id);
     }

@@ -17,6 +17,10 @@ export class AdminDecisionDto {
   final_level_id?: number;
 
   @IsOptional()
+  @IsNumber()
+  final_school_year_id?: number;
+
+  @IsOptional()
   @IsString()
   admin_comment?: string;
 }

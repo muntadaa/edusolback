@@ -12,6 +12,7 @@ import { Company } from '../../company/entities/company.entity';
 import { User } from '../../users/entities/user.entity';
 import { PreInscriptionStatus } from '../enums/preinscription-status.enum';
 import { PreInscriptionDiploma } from '../../pre-inscription-diploma/entities/pre-inscription-diploma.entity';
+import { PreinscriptionMeeting } from './preinscription-meeting.entity';
 
 @Entity('preinscriptions')
 export class PreInscription {
@@ -70,8 +71,8 @@ export class PreInscription {
   @OneToMany(() => PreInscriptionDiploma, (d) => d.preinscription)
   diplomas: PreInscriptionDiploma[];
 
-  @Column({ type: 'text', nullable: true })
-  meeting_notes: string | null;
+  @OneToMany(() => PreinscriptionMeeting, (m) => m.preinscription)
+  meetings: PreinscriptionMeeting[];
 
   @Column({ type: 'text', nullable: true })
   commercial_comment: string | null;
@@ -85,6 +86,9 @@ export class PreInscription {
   @Column({ type: 'int', nullable: true })
   proposed_level_id: number | null;
 
+  @Column({ type: 'int', nullable: true })
+  proposed_school_year_id: number | null;
+
   // Admin decision metadata
   @Column({ type: 'int', nullable: true })
   final_program_id: number | null;
@@ -94,6 +98,9 @@ export class PreInscription {
 
   @Column({ type: 'int', nullable: true })
   final_level_id: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  final_school_year_id: number | null;
 
   @Column({ type: 'text', nullable: true })
   admin_comment: string | null;

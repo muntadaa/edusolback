@@ -115,6 +115,21 @@ export class StudentsController {
     return this.studentsService.findOneWithClass(+id, companyId);
   }
 
+  @Get(':id/with-academic')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 200,
+    description:
+      'Retrieve a student with academic context (program/specialization/level/schoolYear) derived from class_students. Academic can be null if no class_students row exists.',
+  })
+  findOneWithAcademic(@Request() req, @Param('id') id: string) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.studentsService.findOneWithAcademic(+id, companyId);
+  }
+
   @Get(':id/details')
   @UseGuards(JwtAuthGuard)
   @ApiResponse({ 

@@ -3,10 +3,6 @@ import { IsNumber, IsOptional, IsString } from 'class-validator';
 export class CommercialEvaluationDto {
   @IsOptional()
   @IsString()
-  meeting_notes?: string;
-
-  @IsOptional()
-  @IsString()
   commercial_comment?: string;
 
   @IsOptional()
@@ -20,5 +16,9 @@ export class CommercialEvaluationDto {
   @IsOptional()
   @IsNumber()
   proposed_level_id?: number;
+
+  @IsOptional()
+  @IsNumber()
+  proposed_school_year_id?: number;
 }
 

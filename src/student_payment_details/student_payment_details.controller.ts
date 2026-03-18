@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body as BodyDecorator,
   Controller,
   Get,
   Param,
@@ -12,6 +13,7 @@ import {
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { StudentPaymentDetailsService } from './student_payment_details.service';
 import { StudentPaymentDetailQueryDto } from './dto/student-payment-detail-query.dto';
+import { StudentPaymentReminderDto } from './dto/student-payment-reminder.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { StudentAccountingService } from '../student-accounting/student-accounting.service';
 
@@ -58,6 +60,38 @@ export class StudentPaymentDetailsController {
     }
 
     return this.studentPaymentDetailsService.getSummary(query, companyId);
+  }
+
+  @Get('debtors')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 200,
+    description:
+      'List students with remaining balance (aggregated per student: total_due, total_allocated, total_remaining).',
+  })
+  getDebtors(@Request() req, @Query() query: StudentPaymentDetailQueryDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+
+    return this.studentPaymentDetailsService.getDebtors(query, companyId);
+  }
+
+  @Post('payment-reminders')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 200,
+    description:
+      'Send payment reminder emails to one or more students based on their remaining balances.',
+  })
+  sendPaymentReminders(@Request() req, @BodyDecorator() dto: StudentPaymentReminderDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+
+    return this.studentPaymentDetailsService.sendPaymentReminders(dto, companyId);
   }
 
   @Get(':id')

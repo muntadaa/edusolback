@@ -9,6 +9,10 @@ import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
 import { ClassEntity } from '../class/entities/class.entity';
 import { StudentAccountingService } from '../student-accounting/student-accounting.service';
+import { Program } from '../programs/entities/program.entity';
+import { Specialization } from '../specializations/entities/specialization.entity';
+import { Level } from '../level/entities/level.entity';
+import { SchoolYear } from '../school-years/entities/school-year.entity';
 
 @Injectable()
 export class ClassStudentService {
@@ -17,6 +21,14 @@ export class ClassStudentService {
     private readonly repo: Repository<ClassStudent>,
     @InjectRepository(ClassEntity)
     private readonly classRepo: Repository<ClassEntity>,
+    @InjectRepository(Program)
+    private readonly programRepo: Repository<Program>,
+    @InjectRepository(Specialization)
+    private readonly specializationRepo: Repository<Specialization>,
+    @InjectRepository(Level)
+    private readonly levelRepo: Repository<Level>,
+    @InjectRepository(SchoolYear)
+    private readonly schoolYearRepo: Repository<SchoolYear>,
     private readonly studentAccountingService: StudentAccountingService,
   ) {}
 
@@ -26,26 +38,26 @@ export class ClassStudentService {
    */
   private async ensureStudentAssignable(
     studentId: number,
-    classId: number,
+    classId: number | null | undefined,
     companyId: number,
     excludeId?: number,
+    explicitSchoolYearId?: number | null,
   ): Promise<void> {
-    if (!studentId || !classId) return;
+    if (!studentId) return;
 
-    // Load the target class to get its school year
-    const targetClass = await this.classRepo.findOne({
-      where: {
-        id: classId,
-        company_id: companyId,
-        status: Not(-2),
-      },
-    });
+    const schoolYearId =
+      explicitSchoolYearId ??
+      (classId
+        ? (
+            await this.classRepo.findOne({
+              where: { id: classId, company_id: companyId, status: Not(-2) },
+            })
+          )?.school_year_id
+        : null);
 
-    if (!targetClass) {
-      throw new BadRequestException('Class not found or does not belong to your company');
+    if (!schoolYearId) {
+      throw new BadRequestException('school_year_id is required to assign a student');
     }
-
-    const schoolYearId = targetClass.school_year_id;
 
     const qb = this.repo
       .createQueryBuilder('cs')
@@ -66,8 +78,56 @@ export class ClassStudentService {
     }
   }
 
+  private async validateAcademicContext(
+    programId: number,
+    specializationId: number,
+    levelId: number,
+    schoolYearId: number,
+    companyId: number,
+  ): Promise<void> {
+    const [program, specialization, level, schoolYear] = await Promise.all([
+      this.programRepo.findOne({ where: { id: programId, company_id: companyId, status: Not(-2) } as any }),
+      this.specializationRepo.findOne({ where: { id: specializationId, company_id: companyId, status: Not(-2) } as any }),
+      this.levelRepo.findOne({ where: { id: levelId, company_id: companyId, status: Not(-2) } as any }),
+      this.schoolYearRepo.findOne({ where: { id: schoolYearId, company_id: companyId, status: Not(-2) } as any }),
+    ]);
+
+    if (!program) throw new BadRequestException('Program not found or does not belong to your company');
+    if (!specialization) throw new BadRequestException('Specialization not found or does not belong to your company');
+    if (!level) throw new BadRequestException('Level not found or does not belong to your company');
+    if (!schoolYear) throw new BadRequestException('School year not found or does not belong to your company');
+  }
+
   async create(dto: CreateClassStudentDto, companyId: number): Promise<ClassStudent> {
-    await this.ensureStudentAssignable(dto.student_id, dto.class_id, companyId);
+    const hasClass = dto.class_id !== undefined && dto.class_id !== null;
+    if (!hasClass) {
+      if (
+        dto.program_id == null ||
+        dto.specialization_id == null ||
+        dto.level_id == null ||
+        dto.school_year_id == null
+      ) {
+        throw new BadRequestException(
+          'When class_id is null, program_id, specialization_id, level_id and school_year_id are required',
+        );
+      }
+      await this.validateAcademicContext(
+        dto.program_id,
+        dto.specialization_id,
+        dto.level_id,
+        dto.school_year_id,
+        companyId,
+      );
+      await this.ensureStudentAssignable(
+        dto.student_id,
+        null,
+        companyId,
+        undefined,
+        dto.school_year_id,
+      );
+    } else {
+      await this.ensureStudentAssignable(dto.student_id, dto.class_id!, companyId);
+    }
 
     // Always set company_id from authenticated user
     const dtoWithCompany = {
@@ -75,7 +135,19 @@ export class ClassStudentService {
       company_id: companyId,
     };
 
-    const entity = this.repo.create(dtoWithCompany);
+    // If class_id is provided, sync academic context from the class
+    if (hasClass) {
+      const cls = await this.classRepo.findOne({
+        where: { id: dto.class_id!, company_id: companyId, status: Not(-2) },
+      });
+      if (!cls) throw new BadRequestException('Class not found or does not belong to your company');
+      (dtoWithCompany as any).program_id = cls.program_id;
+      (dtoWithCompany as any).specialization_id = cls.specialization_id;
+      (dtoWithCompany as any).level_id = cls.level_id;
+      (dtoWithCompany as any).school_year_id = cls.school_year_id;
+    }
+
+    const entity = this.repo.create(dtoWithCompany as any) as unknown as ClassStudent;
 
     try {
       const saved = await this.repo.save(entity);
@@ -95,12 +167,17 @@ export class ClassStudentService {
       .createQueryBuilder('cs')
       .leftJoinAndSelect('cs.student', 'student')
       .leftJoinAndSelect('cs.class', 'class')
-      .leftJoinAndSelect('class.schoolYear', 'schoolYear')
+      .leftJoinAndSelect('cs.schoolYear', 'schoolYear')
+      .leftJoinAndSelect('cs.program', 'program')
+      .leftJoinAndSelect('cs.specialization', 'specialization')
+      .leftJoinAndSelect('cs.level', 'level')
       .leftJoinAndSelect('cs.company', 'company');
 
     qb.andWhere('cs.status <> :deletedStatus', { deletedStatus: -2 });
     qb.andWhere('student.status <> :studentDeletedStatus', { studentDeletedStatus: -2 });
-    qb.andWhere('class.status <> :classDeletedStatus', { classDeletedStatus: -2 });
+    qb.andWhere('(cs.class_id IS NULL OR class.status <> :classDeletedStatus)', {
+      classDeletedStatus: -2,
+    });
     // Always filter by company_id from authenticated user
     qb.andWhere('cs.company_id = :company_id', { company_id: companyId });
 
@@ -114,7 +191,7 @@ export class ClassStudentService {
     if (query.status !== undefined) qb.andWhere('cs.status = :status', { status: query.status });
     if (query.class_id) qb.andWhere('cs.class_id = :class_id', { class_id: query.class_id });
     if (query.student_id) qb.andWhere('cs.student_id = :student_id', { student_id: query.student_id });
-    if (query.school_year_id) qb.andWhere('class.school_year_id = :school_year_id', { school_year_id: query.school_year_id });
+    if (query.school_year_id) qb.andWhere('cs.school_year_id = :school_year_id', { school_year_id: query.school_year_id });
 
     qb.orderBy('cs.tri', 'ASC').addOrderBy('cs.id', 'DESC');
     qb.skip((page - 1) * limit).take(limit);
@@ -128,13 +205,18 @@ export class ClassStudentService {
       .createQueryBuilder('cs')
       .leftJoinAndSelect('cs.student', 'student')
       .leftJoinAndSelect('cs.class', 'class')
-      .leftJoinAndSelect('class.schoolYear', 'schoolYear')
+      .leftJoinAndSelect('cs.schoolYear', 'schoolYear')
+      .leftJoinAndSelect('cs.program', 'program')
+      .leftJoinAndSelect('cs.specialization', 'specialization')
+      .leftJoinAndSelect('cs.level', 'level')
       .leftJoinAndSelect('cs.company', 'company')
       .where('cs.id = :id', { id })
       .andWhere('cs.company_id = :companyId', { companyId })
       .andWhere('cs.status <> :deletedStatus', { deletedStatus: -2 })
       .andWhere('student.status <> :studentDeletedStatus', { studentDeletedStatus: -2 })
-      .andWhere('class.status <> :classDeletedStatus', { classDeletedStatus: -2 })
+      .andWhere('(cs.class_id IS NULL OR class.status <> :classDeletedStatus)', {
+        classDeletedStatus: -2,
+      })
       .getOne();
 
     if (!found) {
@@ -152,19 +234,58 @@ export class ClassStudentService {
     const existing = await this.findOne(id, companyId);
 
     const targetStudentId = dto.student_id ?? existing.student_id;
-    const targetClassId = dto.class_id ?? existing.class_id;
+    const targetClassId = dto.class_id !== undefined ? (dto.class_id as any) : existing.class_id;
+    const targetSchoolYearId =
+      dto.school_year_id !== undefined ? (dto.school_year_id as any) : existing.school_year_id;
 
     // Only re-check assignability if student or class is changing
     if (
       targetStudentId !== existing.student_id ||
       targetClassId !== existing.class_id
     ) {
-      await this.ensureStudentAssignable(targetStudentId, targetClassId, companyId, id);
+      await this.ensureStudentAssignable(
+        targetStudentId,
+        targetClassId,
+        companyId,
+        id,
+        targetClassId ? null : targetSchoolYearId,
+      );
     }
 
     // Prevent changing company_id - always use authenticated user's company
     const dtoWithoutCompany = { ...dto };
     delete (dtoWithoutCompany as any).company_id;
+
+    const hasClassUpdate =
+      dtoWithoutCompany.class_id !== undefined && dtoWithoutCompany.class_id !== null;
+    const isExplicitNullClass = dtoWithoutCompany.class_id === null;
+
+    // If class_id is explicitly set (or changed), sync academic context from the class
+    if (hasClassUpdate) {
+      const cls = await this.classRepo.findOne({
+        where: { id: dtoWithoutCompany.class_id as any, company_id: companyId, status: Not(-2) },
+      });
+      if (!cls) throw new BadRequestException('Class not found or does not belong to your company');
+      (dtoWithoutCompany as any).program_id = cls.program_id;
+      (dtoWithoutCompany as any).specialization_id = cls.specialization_id;
+      (dtoWithoutCompany as any).level_id = cls.level_id;
+      (dtoWithoutCompany as any).school_year_id = cls.school_year_id;
+    }
+
+    // If class_id is explicitly nulled, require academic context fields
+    if (isExplicitNullClass) {
+      const programId = (dtoWithoutCompany as any).program_id ?? existing.program_id;
+      const specializationId = (dtoWithoutCompany as any).specialization_id ?? existing.specialization_id;
+      const levelId = (dtoWithoutCompany as any).level_id ?? existing.level_id;
+      const schoolYearId = (dtoWithoutCompany as any).school_year_id ?? existing.school_year_id;
+
+      if (programId == null || specializationId == null || levelId == null || schoolYearId == null) {
+        throw new BadRequestException(
+          'When class_id is null, program_id, specialization_id, level_id and school_year_id are required',
+        );
+      }
+      await this.validateAcademicContext(programId, specializationId, levelId, schoolYearId, companyId);
+    }
 
     const merged = this.repo.merge(existing, dtoWithoutCompany);
     // Ensure company_id remains from authenticated user
