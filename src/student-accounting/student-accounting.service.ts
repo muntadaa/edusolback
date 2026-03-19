@@ -108,6 +108,91 @@ export class StudentAccountingService {
     };
   }
 
+  /**
+   * Bulk sync endpoint helper:
+   * After level pricing/rubrique updates, generate missing bills for students
+   * assigned to this level (and optionally school year).
+   */
+  async syncByLevelPricingUpdate(
+    levelId: number,
+    companyId: number,
+    schoolYearId?: number,
+  ): Promise<{
+    level_id: number;
+    school_year_id: number | null;
+    processed_assignments: number;
+    processed_students: number;
+    generated_count: number;
+    skipped_students: Array<{ student_id: number; reason: string }>;
+  }> {
+    const qb = this.classStudentRepo
+      .createQueryBuilder('cs')
+      .leftJoinAndSelect('cs.student', 'student')
+      .leftJoinAndSelect('cs.class', 'class')
+      .leftJoinAndSelect('class.schoolYear', 'classSchoolYear')
+      .where('cs.company_id = :companyId', { companyId })
+      .andWhere('cs.status <> :deletedStatus', { deletedStatus: -2 })
+      .andWhere('student.status <> :studentDeletedStatus', { studentDeletedStatus: -2 })
+      .andWhere('(cs.class_id IS NULL OR class.status <> :classDeletedStatus)', {
+        classDeletedStatus: -2,
+      })
+      .andWhere('(cs.level_id = :levelId OR class.level_id = :levelId)', { levelId });
+
+    if (schoolYearId) {
+      qb.andWhere('(cs.school_year_id = :schoolYearId OR class.school_year_id = :schoolYearId)', {
+        schoolYearId,
+      });
+    }
+
+    const assignments = await qb.getMany();
+
+    let generatedCount = 0;
+    const processedStudents = new Set<number>();
+    const studentsToReallocate = new Set<number>();
+    const skippedByStudent = new Map<number, string>();
+
+    for (const assignment of assignments) {
+      if (!assignment.student) {
+        continue;
+      }
+      const studentId = assignment.student_id;
+      processedStudents.add(studentId);
+
+      if (assignment.student.status !== 1) {
+        if (!skippedByStudent.has(studentId)) {
+          skippedByStudent.set(studentId, 'Student is not active');
+        }
+        continue;
+      }
+
+      const generated = await this.generateFromAssignment(
+        assignment,
+        assignment.student,
+        companyId,
+      );
+      generatedCount += generated;
+      if (generated > 0) {
+        studentsToReallocate.add(studentId);
+      }
+    }
+
+    for (const studentId of studentsToReallocate) {
+      await this.reallocateStudentPayments(studentId, companyId);
+    }
+
+    return {
+      level_id: levelId,
+      school_year_id: schoolYearId ?? null,
+      processed_assignments: assignments.length,
+      processed_students: processedStudents.size,
+      generated_count: generatedCount,
+      skipped_students: Array.from(skippedByStudent.entries()).map(([student_id, reason]) => ({
+        student_id,
+        reason,
+      })),
+    };
+  }
+
   private async generateFromAssignment(
     assignment: ClassStudent,
     student: Student,

@@ -14,6 +14,7 @@ import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { StudentPaymentDetailsService } from './student_payment_details.service';
 import { StudentPaymentDetailQueryDto } from './dto/student-payment-detail-query.dto';
 import { StudentPaymentReminderDto } from './dto/student-payment-reminder.dto';
+import { SyncLevelPricingDto } from './dto/sync-level-pricing.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { StudentAccountingService } from '../student-accounting/student-accounting.service';
 
@@ -36,6 +37,26 @@ export class StudentPaymentDetailsController {
     }
 
     return this.studentAccountingService.syncStudentObligations(studentId, companyId);
+  }
+
+  @Post('sync-level-pricing')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 200,
+    description:
+      'Generate missing bills for students in a level (and optional school year) after level pricing/rubrique updates.',
+  })
+  syncLevelPricing(@Request() req, @BodyDecorator() dto: SyncLevelPricingDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+
+    return this.studentAccountingService.syncByLevelPricingUpdate(
+      dto.level_id,
+      companyId,
+      dto.school_year_id,
+    );
   }
 
   @Get()

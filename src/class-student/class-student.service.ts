@@ -223,7 +223,11 @@ export class ClassStudentService {
       throw new NotFoundException('Class student assignment not found');
     }
 
-    if (!found.student || found.student.status === -2 || !found.class || found.class.status === -2) {
+    if (
+      !found.student ||
+      found.student.status === -2 ||
+      (found.class_id !== null && (!found.class || found.class.status === -2))
+    ) {
       throw new NotFoundException('Class student assignment not found');
     }
 

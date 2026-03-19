@@ -21,6 +21,7 @@ import { PreinscriptionMeeting } from './entities/preinscription-meeting.entity'
 import { CreatePreinscriptionMeetingDto } from './dto/create-preinscription-meeting.dto';
 import { UpdatePreinscriptionMeetingDto } from './dto/update-preinscription-meeting.dto';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
+import { Student } from '../students/entities/student.entity';
 
 @Injectable()
 export class PreinscriptionsService {
@@ -45,6 +46,8 @@ export class PreinscriptionsService {
     private readonly rolePageRepo: Repository<RolePage>,
     @InjectRepository(Page)
     private readonly pageRepo: Repository<Page>,
+    @InjectRepository(Student)
+    private readonly studentRepo: Repository<Student>,
     private readonly conversionService: PreInscriptionConversionService,
   ) {}
 
@@ -547,11 +550,7 @@ export class PreinscriptionsService {
       preinscription.admin_comment = decisionDto.admin_comment;
     }
 
-    preinscription.status = targetStatus;
-
-    preinscription.decision_at = new Date();
-    await this.repo.save(preinscription);
-
+    // For approval, validate all blockers BEFORE saving status.
     if (decisionDto.approved) {
       if (!preinscription.final_level_id) {
         throw new BadRequestException('final_level_id is required to approve a pre-inscription');
@@ -559,6 +558,27 @@ export class PreinscriptionsService {
       if (!preinscription.final_school_year_id) {
         throw new BadRequestException('final_school_year_id is required to approve a pre-inscription');
       }
+
+      const existingStudent = await this.studentRepo.findOne({
+        where: {
+          email: preinscription.email,
+          company_id: preinscription.company_id,
+          status: Not(-2),
+        },
+      });
+      if (existingStudent) {
+        throw new BadRequestException(
+          `A student with email ${preinscription.email} already exists`,
+        );
+      }
+    }
+
+    preinscription.status = targetStatus;
+
+    preinscription.decision_at = new Date();
+    await this.repo.save(preinscription);
+
+    if (decisionDto.approved) {
       await this.conversionService.convertToStudent(id);
       return this.findOne(id);
     }
