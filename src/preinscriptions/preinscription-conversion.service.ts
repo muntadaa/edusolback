@@ -65,6 +65,7 @@ export class PreInscriptionConversionService {
         phone: preinscription.whatsapp_phone,
         nationality: preinscription.nationality,
         city: preinscription.city,
+        picture: (preinscription as any).picture ?? null,
         company_id: preinscription.company_id,
         status: 2,
       });

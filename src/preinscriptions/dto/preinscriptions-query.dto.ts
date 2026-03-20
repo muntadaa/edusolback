@@ -1,5 +1,6 @@
 import { PaginationDto } from '../../common/dto/pagination.dto';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsNumber } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class PreinscriptionsQueryDto extends PaginationDto {
   @IsOptional()
@@ -17,5 +18,10 @@ export class PreinscriptionsQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   desired_formation?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  commercial_id?: number;
 }
 

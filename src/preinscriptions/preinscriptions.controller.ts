@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException, ParseIntPipe } from '@nestjs/common';
-import { ApiBearerAuth, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException, ParseIntPipe, UseInterceptors, UploadedFile, UsePipes, ValidationPipe } from '@nestjs/common';
+import { ApiBearerAuth, ApiResponse, ApiTags, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { PreinscriptionsService } from './preinscriptions.service';
 import { CreatePreinscriptionDto } from './dto/create-preinscription.dto';
 import { UpdatePreinscriptionDto } from './dto/update-preinscription.dto';
@@ -11,6 +11,10 @@ import { CommercialEvaluationDto } from './dto/commercial-evaluation.dto';
 import { AssignCommercialBulkDto } from './dto/assign-commercial-bulk.dto';
 import { CreatePreinscriptionMeetingDto } from './dto/create-preinscription-meeting.dto';
 import { UpdatePreinscriptionMeetingDto } from './dto/update-preinscription-meeting.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @ApiTags('Preinscriptions')
 @ApiBearerAuth()
@@ -235,6 +239,132 @@ export class PreinscriptionsController {
     @Body() dto: AdminDecisionDto,
   ) {
     return this.preinscriptionsService.adminDecision(id, dto);
+  }
+
+  @Patch(':id/student-data/commercial')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Commercial: update student personal data in allowed workflow phases.' })
+  updateStudentDataCommercial(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePreinscriptionDto,
+  ) {
+    const companyId = req.user?.company_id;
+    const actorId = req.user?.id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    if (!actorId) throw new BadRequestException('User id is required');
+    return this.preinscriptionsService.updateStudentDataInPhase(
+      id,
+      companyId,
+      dto,
+      actorId,
+      'commercial',
+    );
+  }
+
+  @Patch(':id/student-data/admin')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({ status: 200, description: 'Admin: update student personal data in allowed workflow phases.' })
+  updateStudentDataAdmin(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePreinscriptionDto,
+  ) {
+    const companyId = req.user?.company_id;
+    const actorId = req.user?.id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    if (!actorId) throw new BadRequestException('User id is required');
+    return this.preinscriptionsService.updateStudentDataInPhase(
+      id,
+      companyId,
+      dto,
+      actorId,
+      'admin',
+    );
+  }
+
+  @Patch(':id/picture/commercial')
+  @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('picture', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const uploadPath = path.join(process.cwd(), 'uploads', 'preinscriptions');
+          if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+          cb(null, uploadPath);
+        },
+        filename: (req, file, cb) => {
+          const timestamp = Date.now();
+          const sanitized = file.originalname.replace(/\s+/g, '_');
+          cb(null, `${timestamp}_${sanitized}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowed.includes(file.mimetype)) return cb(null, true);
+        return cb(null, false);
+      },
+      limits: { fileSize: 2 * 1024 * 1024 },
+    }),
+  )
+  @ApiResponse({ status: 200, description: 'Commercial: upload pre-inscription picture.' })
+  updateCommercialPicture(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: any,
+  ) {
+    const companyId = req.user?.company_id;
+    const actorId = req.user?.id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    if (!actorId) throw new BadRequestException('User id is required');
+    if (!file) throw new BadRequestException('picture file is required');
+
+    const relative = path.posix.join('uploads', 'preinscriptions', path.basename(file.path));
+    const picturePath = `/${relative.replace(/\\/g, '/')}`;
+    return this.preinscriptionsService.setPictureInPhase(id, companyId, actorId, 'commercial', picturePath);
+  }
+
+  @Patch(':id/picture/admin')
+  @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('picture', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const uploadPath = path.join(process.cwd(), 'uploads', 'preinscriptions');
+          if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+          cb(null, uploadPath);
+        },
+        filename: (req, file, cb) => {
+          const timestamp = Date.now();
+          const sanitized = file.originalname.replace(/\s+/g, '_');
+          cb(null, `${timestamp}_${sanitized}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowed.includes(file.mimetype)) return cb(null, true);
+        return cb(null, false);
+      },
+      limits: { fileSize: 2 * 1024 * 1024 },
+    }),
+  )
+  @ApiResponse({ status: 200, description: 'Admin: upload pre-inscription picture.' })
+  updateAdminPicture(
+    @Request() req,
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: any,
+  ) {
+    const companyId = req.user?.company_id;
+    const actorId = req.user?.id;
+    if (!companyId) throw new BadRequestException('User must belong to a company');
+    if (!actorId) throw new BadRequestException('User id is required');
+    if (!file) throw new BadRequestException('picture file is required');
+
+    const relative = path.posix.join('uploads', 'preinscriptions', path.basename(file.path));
+    const picturePath = `/${relative.replace(/\\/g, '/')}`;
+    return this.preinscriptionsService.setPictureInPhase(id, companyId, actorId, 'admin', picturePath);
   }
 
   @Delete(':id')

@@ -44,6 +44,9 @@ export class PreInscription {
   desired_formation: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
+  picture: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
   how_known: string | null;
 
   // Workflow status (single-table, enum as varchar for portability)

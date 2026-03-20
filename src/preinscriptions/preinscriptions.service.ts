@@ -147,6 +147,12 @@ export class PreinscriptionsService {
       });
     }
 
+    if (query.commercial_id !== undefined) {
+      qb.andWhere('pre.commercial_id = :commercialId', {
+        commercialId: query.commercial_id,
+      });
+    }
+
     qb.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
@@ -286,6 +292,70 @@ export class PreinscriptionsService {
     const merged = this.repo.merge(existing, dtoWithoutCompany);
     merged.company_id = companyId;
     return this.repo.save(merged);
+  }
+
+  /**
+   * Commercial/admin phase: update pre-inscription "student" personal data only.
+   * Prevents status/company_id changes and blocks updates outside workflow phases.
+   */
+  async updateStudentDataInPhase(
+    id: number,
+    companyId: number,
+    updateDto: UpdatePreinscriptionDto,
+    actorId: number,
+    actorType: 'commercial' | 'admin',
+  ): Promise<PreInscription> {
+    const pre = await this.findOneByCompany(id, companyId);
+
+    const allowedStatuses = actorType === 'commercial'
+      ? [PreInscriptionStatus.ASSIGNED_TO_COMMERCIAL, PreInscriptionStatus.COMMERCIAL_REVIEW]
+      : [PreInscriptionStatus.SENT_TO_ADMIN, PreInscriptionStatus.APPROVED];
+
+    if (!allowedStatuses.includes(pre.status)) {
+      throw new BadRequestException('Pre-inscription is not in a phase that allows student data update');
+    }
+
+    if (actorType === 'commercial') {
+      // Only the assigned commercial can edit personal data
+      const effectiveCommercialId = pre.assigned_commercial_id ?? pre.commercial_id;
+      if (!effectiveCommercialId || effectiveCommercialId !== actorId) {
+        throw new BadRequestException('You are not assigned to this pre-inscription');
+      }
+    }
+
+    // Reuse existing updateByCompany but block status/company_id updates
+    return this.updateByCompany(id, companyId, updateDto);
+  }
+
+  /**
+   * Commercial/admin phase: set or update the pre-inscription picture (single image upload).
+   */
+  async setPictureInPhase(
+    id: number,
+    companyId: number,
+    actorId: number,
+    actorType: 'commercial' | 'admin',
+    picturePath: string,
+  ): Promise<PreInscription> {
+    const pre = await this.findOneByCompany(id, companyId);
+
+    const allowedStatuses = actorType === 'commercial'
+      ? [PreInscriptionStatus.ASSIGNED_TO_COMMERCIAL, PreInscriptionStatus.COMMERCIAL_REVIEW]
+      : [PreInscriptionStatus.SENT_TO_ADMIN, PreInscriptionStatus.APPROVED];
+
+    if (!allowedStatuses.includes(pre.status)) {
+      throw new BadRequestException('Pre-inscription is not in a phase that allows picture update');
+    }
+
+    if (actorType === 'commercial') {
+      const effectiveCommercialId = pre.assigned_commercial_id ?? pre.commercial_id;
+      if (!effectiveCommercialId || effectiveCommercialId !== actorId) {
+        throw new BadRequestException('You are not assigned to this pre-inscription');
+      }
+    }
+
+    pre.picture = picturePath;
+    return this.repo.save(pre);
   }
 
   async remove(id: number): Promise<void> {
