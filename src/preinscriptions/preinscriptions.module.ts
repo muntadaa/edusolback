@@ -18,6 +18,7 @@ import { User } from '../users/entities/user.entity';
 import { UserRole } from '../user-roles/entities/user-role.entity';
 import { RolePage } from '../pages/entities/role-page.entity';
 import { Page } from '../pages/entities/page.entity';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { Page } from '../pages/entities/page.entity';
       Page,
     ]),
     StudentsModule,
+    MailModule,
   ],
   controllers: [PreinscriptionsController],
   providers: [PreinscriptionsService, PreInscriptionConversionService],

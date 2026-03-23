@@ -195,7 +195,7 @@ export class ClassCourseService {
 
     if (existing) {
       throw new BadRequestException(
-        'A class course with the same level, module and course already exists',
+        'A programme course with the same level, module and course already exists',
       );
     }
   }

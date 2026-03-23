@@ -16,8 +16,8 @@ export class PreInscriptionDiploma {
   id: number;
 
   // Keep DB column names compatible while aligning property names with student_diplomes.
-  @Column({ name: 'diploma_name' })
-  title: string;
+  @Column({ name: 'diploma_name', type: 'varchar', length: 255, nullable: true })
+  title: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true, name: 'institution' })
   school: string | null;

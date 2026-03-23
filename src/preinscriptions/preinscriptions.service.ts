@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { CreatePreinscriptionDto } from './dto/create-preinscription.dto';
@@ -22,9 +22,13 @@ import { CreatePreinscriptionMeetingDto } from './dto/create-preinscription-meet
 import { UpdatePreinscriptionMeetingDto } from './dto/update-preinscription-meeting.dto';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
 import { Student } from '../students/entities/student.entity';
+import { MailService } from '../mail/mail.service';
+import { MailTemplateService } from '../mail/mail-template.service';
 
 @Injectable()
 export class PreinscriptionsService {
+  private readonly logger = new Logger(PreinscriptionsService.name);
+
   constructor(
     @InjectRepository(PreInscription)
     private readonly repo: Repository<PreInscription>,
@@ -48,8 +52,29 @@ export class PreinscriptionsService {
     private readonly pageRepo: Repository<Page>,
     @InjectRepository(Student)
     private readonly studentRepo: Repository<Student>,
+    private readonly mailService: MailService,
+    private readonly mailTemplateService: MailTemplateService,
     private readonly conversionService: PreInscriptionConversionService,
   ) {}
+
+  private validateBirthDateNotFuture(birthDate?: string | Date | null): void {
+    if (!birthDate) {
+      return;
+    }
+
+    const parsed = birthDate instanceof Date ? birthDate : new Date(birthDate);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('birth_date is invalid');
+    }
+
+    // Compare by day only to allow any time component on the same day.
+    const birthDay = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
+    const today = new Date();
+    const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    if (birthDay > todayDay) {
+      throw new BadRequestException('birth_date cannot be in the future');
+    }
+  }
 
   private async resolveCompanyByPublicToken(publicToken: string): Promise<Company> {
     const company = await this.companyRepo.findOne({
@@ -62,6 +87,7 @@ export class PreinscriptionsService {
   }
 
   async create(createPreinscriptionDto: CreatePreinscriptionDto): Promise<PreInscription> {
+    this.validateBirthDateNotFuture(createPreinscriptionDto.birth_date as any);
     const entity = this.repo.create({
       ...createPreinscriptionDto,
       status: PreInscriptionStatus.NEW,
@@ -227,13 +253,69 @@ export class PreinscriptionsService {
     companyId: number,
     dto: CreatePreinscriptionMeetingDto,
   ): Promise<PreinscriptionMeeting> {
-    await this.findOneByCompany(preinscriptionId, companyId);
+    const pre = await this.findOneByCompany(preinscriptionId, companyId);
     const meeting = this.meetingRepo.create({
       preinscription_id: preinscriptionId,
       meeting_at: new Date(dto.meeting_at),
       meeting_notes: dto.meeting_notes ?? null,
     });
-    return this.meetingRepo.save(meeting);
+    const savedMeeting = await this.meetingRepo.save(meeting);
+
+    // Email is best-effort: meeting creation must still succeed if SMTP/template fails.
+    try {
+      await this.sendMeetingScheduledEmail(pre, savedMeeting, companyId);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to send meeting email for preinscription ${preinscriptionId}: ${error?.message ?? error}`,
+      );
+    }
+
+    return savedMeeting;
+  }
+
+  private async sendMeetingScheduledEmail(
+    pre: PreInscription,
+    meeting: PreinscriptionMeeting,
+    companyId: number,
+  ): Promise<void> {
+    if (!pre.email) {
+      return;
+    }
+
+    const company = await this.companyRepo.findOne({
+      where: { id: companyId, status: Not(-2) },
+    });
+    const commercialId = pre.commercial_id ?? pre.assigned_commercial_id ?? null;
+    const commercial = commercialId
+      ? await this.userRepo.findOne({
+          where: { id: commercialId, company_id: companyId, status: Not(-2) },
+        })
+      : null;
+
+    const companyName = company?.name || 'Your School';
+    const commercialName = commercial?.username || 'our commercial team';
+    const meetingDateTime = new Date(meeting.meeting_at).toLocaleString('fr-FR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
+    const html = this.mailTemplateService.renderTemplate('preinscription-meeting', {
+      companyName,
+      studentName: `${pre.first_name} ${pre.last_name}`,
+      meetingDateTime,
+      commercialName,
+      meetingNotes: meeting.meeting_notes || 'No additional notes.',
+    });
+
+    await this.mailService.sendMail(
+      pre.email,
+      `Meeting scheduled with ${companyName}`,
+      html,
+    );
   }
 
   async updateMeeting(
@@ -273,6 +355,9 @@ export class PreinscriptionsService {
     id: number,
     updatePreinscriptionDto: UpdatePreinscriptionDto,
   ): Promise<PreInscription> {
+    if (updatePreinscriptionDto.birth_date !== undefined) {
+      this.validateBirthDateNotFuture(updatePreinscriptionDto.birth_date as any);
+    }
     const existing = await this.findOne(id);
     const merged = this.repo.merge(existing, updatePreinscriptionDto);
     return this.repo.save(merged);
@@ -283,6 +368,9 @@ export class PreinscriptionsService {
     companyId: number,
     updatePreinscriptionDto: UpdatePreinscriptionDto,
   ): Promise<PreInscription> {
+    if (updatePreinscriptionDto.birth_date !== undefined) {
+      this.validateBirthDateNotFuture(updatePreinscriptionDto.birth_date as any);
+    }
     const existing = await this.findOneByCompany(id, companyId);
     // Prevent changing company_id from payload
     const dtoWithoutCompany = { ...updatePreinscriptionDto } as any;
@@ -519,6 +607,22 @@ export class PreinscriptionsService {
     }
     if (dto.proposed_school_year_id !== undefined) {
       preinscription.proposed_school_year_id = dto.proposed_school_year_id;
+    }
+
+    if (!preinscription.proposed_program_id) {
+      throw new BadRequestException(
+        'proposed_program_id is required before moving to COMMERCIAL_REVIEW',
+      );
+    }
+    if (!preinscription.proposed_specialization_id) {
+      throw new BadRequestException(
+        'proposed_specialization_id is required before moving to COMMERCIAL_REVIEW',
+      );
+    }
+    if (!preinscription.proposed_level_id) {
+      throw new BadRequestException(
+        'proposed_level_id is required before moving to COMMERCIAL_REVIEW',
+      );
     }
 
     preinscription.status = PreInscriptionStatus.COMMERCIAL_REVIEW;

@@ -77,7 +77,7 @@ export class PreInscriptionConversionService {
       const preDiplomas = preinscription.diplomas ?? [];
       for (const diploma of preDiplomas) {
         const studentDiplome = manager.create(StudentDiplome, {
-          title: diploma.title,
+          title: diploma.title ?? diploma.diplome ?? 'Diploma',
           school: diploma.school ?? 'Unknown',
           diplome: diploma.diplome ?? diploma.title,
           annee: diploma.annee ?? undefined,
@@ -88,7 +88,7 @@ export class PreInscriptionConversionService {
           student_id: savedStudent.id,
           company_id: preinscription.company_id,
           status: 1,
-        });
+        } as any);
         await manager.save(StudentDiplome, studentDiplome);
       }
 

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, IsInt } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MaxLength, IsInt, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreatePreinscriptionDto {
@@ -37,6 +37,20 @@ export class CreatePreinscriptionDto {
   @IsNotEmpty()
   @MaxLength(255)
   city: string;
+
+  @ApiPropertyOptional({ example: 'Bd Zerktouni, Casablanca', maxLength: 255 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  address?: string;
+
+  @ApiPropertyOptional({
+    example: '2001-05-17',
+    description: 'Student birth date (YYYY-MM-DD)',
+  })
+  @IsOptional()
+  @IsDateString()
+  birth_date?: string;
 
   @ApiProperty({
     example: 'Licence en Informatique',

@@ -1,13 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, IsNumber, Min, Max } from 'class-validator';
+import { IsInt, IsOptional, IsString, MaxLength, IsNumber, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreatePreInscriptionDiplomaDto {
-  @ApiProperty({ maxLength: 255, example: 'Licence en Informatique' })
+  @ApiPropertyOptional({ maxLength: 255, example: 'Licence en Informatique' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(255)
-  title: string;
+  title?: string | null;
 
   @ApiPropertyOptional({ maxLength: 255, example: 'Université Hassan II' })
   @IsOptional()

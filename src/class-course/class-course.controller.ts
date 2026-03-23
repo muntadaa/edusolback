@@ -23,7 +23,7 @@ export class ClassCourseController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  @ApiResponse({ status: 201, description: 'Class course created successfully.' })
+  @ApiResponse({ status: 201, description: 'Class course affected successfully.' })
   create(@Request() req, @Body() dto: CreateClassCourseDto) {
     const companyId = this.ensureCompany(req);
     return this.classCourseService.create(dto, companyId);
@@ -31,7 +31,7 @@ export class ClassCourseController {
 
   @Post('batch')
   @UseGuards(JwtAuthGuard)
-  @ApiResponse({ status: 201, description: 'Multiple class courses created successfully.' })
+  @ApiResponse({ status: 201, description: 'Multiple class courses affected successfully.' })
   createBatch(@Request() req, @Body() dto: CreateClassCourseBatchDto) {
     const companyId = this.ensureCompany(req);
     return this.classCourseService.createMany(dto.items, companyId);
