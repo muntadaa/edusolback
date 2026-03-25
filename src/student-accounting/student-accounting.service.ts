@@ -158,13 +158,6 @@ export class StudentAccountingService {
       const studentId = assignment.student_id;
       processedStudents.add(studentId);
 
-      if (assignment.student.status !== 1) {
-        if (!skippedByStudent.has(studentId)) {
-          skippedByStudent.set(studentId, 'Student is not active');
-        }
-        continue;
-      }
-
       const generated = await this.generateFromAssignment(
         assignment,
         assignment.student,
@@ -172,7 +165,10 @@ export class StudentAccountingService {
       );
       generatedCount += generated;
       if (generated > 0) {
-        studentsToReallocate.add(studentId);
+        // Only reallocate for active students (inactive students typically have no payments yet).
+        if (assignment.student.status === 1) {
+          studentsToReallocate.add(studentId);
+        }
       }
     }
 

@@ -296,6 +296,13 @@ export class ClassStudentService {
     merged.company_id = companyId;
     merged.company = { id: companyId } as any;
 
+    // IMPORTANT: if class_id is explicitly nulled, also null the relation.
+    // Otherwise TypeORM may keep the loaded relation and persist the old FK.
+    if (isExplicitNullClass) {
+      (merged as any).class_id = null;
+      (merged as any).class = null;
+    }
+
     await this.repo.save(merged);
     await this.studentAccountingService.syncFromClassStudent(id, companyId);
 

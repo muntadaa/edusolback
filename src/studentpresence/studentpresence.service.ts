@@ -92,7 +92,18 @@ export class StudentPresenceService {
 
   async findAll(query: StudentPresenceQueryDto, companyId: number): Promise<PaginatedResponseDto<StudentPresence>> {
     const page = query.page ?? 1;
-    const limit = query.limit ?? 10;
+
+    // Listing presence for one session must return every student row; default limit was 10
+    // so students beyond the first page looked "absent" after refresh even when saved in DB.
+    const forOneSession =
+      query.student_planning_id !== undefined &&
+      query.student_planning_id !== null &&
+      Number(query.student_planning_id) > 0;
+
+    const defaultLimit = forOneSession ? 5000 : 10;
+    const maxLimit = forOneSession ? 10000 : 100;
+    const rawLimit = query.limit ?? defaultLimit;
+    const limit = Math.min(Math.max(1, rawLimit), maxLimit);
 
     const qb = this.repo
       .createQueryBuilder('presence')
@@ -100,7 +111,8 @@ export class StudentPresenceService {
       .leftJoinAndSelect('presence.studentPlanning', 'studentPlanning')
       .leftJoinAndSelect('presence.company', 'company')
       .leftJoinAndSelect('presence.studentReport', 'studentReport')
-      .orderBy('presence.created_at', 'DESC')
+      .orderBy('presence.student_id', 'ASC')
+      .addOrderBy('presence.id', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
 
