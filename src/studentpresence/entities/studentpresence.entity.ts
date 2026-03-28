@@ -1,4 +1,5 @@
 import {
+  AfterLoad,
   Column,
   CreateDateColumn,
   Entity,
@@ -60,8 +61,25 @@ export class StudentPresence {
   @Column({ type: 'boolean', default: false, name: 'validate_report' })
   validate_report: boolean;
 
+  /** Scholarity/support or activation: presence fields cannot be edited. */
+  @Column({ type: 'boolean', default: false, name: 'presence_locked' })
+  presence_locked: boolean;
+
+  /** Scholarity/support or validate-notes: note fields cannot be edited. */
+  @Column({ type: 'boolean', default: false, name: 'notes_locked' })
+  notes_locked: boolean;
+
+  /** Legacy: both locks; kept in sync as presence_locked && notes_locked when saved from planning flows. */
   @Column({ type: 'boolean', default: false, name: 'locked' })
   locked: boolean;
+
+  @AfterLoad()
+  hydrateLegacyLock(): void {
+    if (this.locked && !this.presence_locked && !this.notes_locked) {
+      this.presence_locked = true;
+      this.notes_locked = true;
+    }
+  }
 
   @Column({ type: 'int', default: 2, name: 'statut' })
   status: number;

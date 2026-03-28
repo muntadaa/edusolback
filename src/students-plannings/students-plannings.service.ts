@@ -131,11 +131,21 @@ export class StudentsPlanningsService {
     // Check for overlaps (time conflicts)
     await this.ensureNoOverlap(dto, undefined, companyId);
 
-    // Always set company_id from authenticated user; accept hasNotes or has_notes
-    const hasNotes = dto.hasNotes ?? (dto as any).has_notes;
+    // Always set company_id from authenticated user; notes: hasNotes | has_notes | has_note
+    const d = dto as CreateStudentsPlanningDto & { has_note?: boolean };
+    const hasNotesValue = d.hasNotes ?? d.has_notes ?? d.has_note ?? false;
+
+    const {
+      hasNotes: _hn,
+      has_notes: _hr,
+      has_note: _hnote,
+      company_id: _c,
+      ...createRest
+    } = d;
+
     const entity = this.repo.create({
-      ...dto,
-      hasNotes,
+      ...createRest,
+      hasNotes: hasNotesValue,
       status: dto.status ?? 2,
       company_id: companyId,
     });
@@ -374,9 +384,15 @@ export class StudentsPlanningsService {
     // Prevent changing company_id - always use authenticated user's company
     const dtoWithoutCompany = { ...dto };
     delete (dtoWithoutCompany as any).company_id;
-    if ((dto as any).has_notes !== undefined || dto.hasNotes !== undefined) {
-      (dtoWithoutCompany as any).hasNotes = dto.hasNotes ?? (dto as any).has_notes;
+    if (
+      (dto as any).has_notes !== undefined ||
+      dto.hasNotes !== undefined ||
+      (dto as any).has_note !== undefined
+    ) {
+      (dtoWithoutCompany as any).hasNotes =
+        dto.hasNotes ?? (dto as any).has_notes ?? (dto as any).has_note;
     }
+    delete (dtoWithoutCompany as any).has_note;
 
     // Four booleans: presence_validated_teacher, presence_validated_controleur, notes_validated_teacher, notes_validated_controleur
     const pt = dto.presence_validated_teacher ?? (dto as any).presence_validated_teacher;
@@ -395,24 +411,20 @@ export class StudentsPlanningsService {
     if (nt === false && curNt) throw new BadRequestException('notes_validated_teacher cannot be reverted to false');
     if (nc === false && curNc) throw new BadRequestException('notes_validated_controleur cannot be reverted to false');
 
-    // Controller can set presence_validated_controleur only when presence_validated_teacher is true
-    if (pc === true && !curPt && pt !== true) {
-      throw new BadRequestException('presence_validated_controleur can only be set when presence_validated_teacher is true');
-    }
-    // Teacher can set notes_validated_teacher only when presence_validated_teacher is true
-    if (nt === true && !curPt && pt !== true) {
-      throw new BadRequestException('notes_validated_teacher can only be set when presence_validated_teacher is true');
-    }
-    // Controller can set notes_validated_controleur only when notes_validated_teacher is true
-    if (nc === true && !curNt && nt !== true) {
-      throw new BadRequestException('notes_validated_controleur can only be set when notes_validated_teacher is true');
+    // Scholarity may lock presence/notes without teacher flags. Teacher notes validation requires presence to be addressed first (teacher or scholarity).
+    const presenceAddressedForNotes =
+      curPt || curPc || pt === true || pc === true;
+    if (nt === true && !curNt && !presenceAddressedForNotes) {
+      throw new BadRequestException(
+        'notes_validated_teacher requires presence to be validated first (by teacher or by scholarity/support).',
+      );
     }
     // Notes validation only when session has notes
     if ((nt === true || nc === true) && !existing.hasNotes) {
       throw new BadRequestException('Notes validation is only allowed when the session has notes (has_notes === true)');
     }
 
-    // When teacher activates presence (presence_validated_teacher: true): require at least one present, set status to 1
+    // Teacher activates presence OR scholarity locks presence: require at least one present, set status when teacher path
     if (pt === true && !curPt) {
       (dtoWithoutCompany as any).status = 1;
       const presences = await this.presenceRepo.find({
@@ -421,6 +433,17 @@ export class StudentsPlanningsService {
       const atLeastOnePresent = presences.some((p) => p.presence === 'present');
       if (!atLeastOnePresent) {
         throw new BadRequestException('At least one student must be marked present before activating presence');
+      }
+    }
+    if (pc === true && !curPc) {
+      const presences = await this.presenceRepo.find({
+        where: { student_planning_id: id, company_id: companyId },
+      });
+      const atLeastOnePresent = presences.some((p) => p.presence === 'present');
+      if (!atLeastOnePresent) {
+        throw new BadRequestException(
+          'At least one student must be marked present before scholarity can finalize presence',
+        );
       }
     }
 
@@ -460,13 +483,13 @@ export class StudentsPlanningsService {
     merged.company_id = companyId;
     merged.company = { id: companyId } as any;
 
-    // Sync legacy status from booleans for GET backward compat
-    merged.presence_validation_status = merged.presence_validated_teacher && merged.presence_validated_controleur
+    // Sync legacy status: scholarity lock = LOCKED; teacher-only = TEACHER_VALIDATED (still needs scholarity for final lock)
+    merged.presence_validation_status = merged.presence_validated_controleur
       ? VALIDATION_LOCKED
       : merged.presence_validated_teacher
         ? VALIDATION_TEACHER_VALIDATED
         : VALIDATION_DRAFT;
-    merged.notes_validation_status = merged.notes_validated_teacher && merged.notes_validated_controleur
+    merged.notes_validation_status = merged.notes_validated_controleur
       ? VALIDATION_LOCKED
       : merged.notes_validated_teacher
         ? VALIDATION_TEACHER_VALIDATED
@@ -474,15 +497,17 @@ export class StudentsPlanningsService {
 
     await this.repo.save(merged);
 
-    // When presence or notes is fully locked (both booleans true), lock all presence rows
-    const presenceLocked = merged.presence_validated_teacher && merged.presence_validated_controleur;
-    const notesLocked = merged.notes_validated_teacher && merged.notes_validated_controleur;
-    if (presenceLocked || notesLocked) {
+    // Scholarity lock on presence or notes locks student_presence rows (support-only path does not require teacher flags)
+    const presenceLockedBySupport = merged.presence_validated_controleur;
+    const notesLockedBySupport = merged.notes_validated_controleur;
+    if (presenceLockedBySupport || notesLockedBySupport) {
       const presences = await this.presenceRepo.find({
         where: { student_planning_id: id, company_id: companyId },
       });
       for (const p of presences) {
-        p.locked = true;
+        if (presenceLockedBySupport) p.presence_locked = true;
+        if (notesLockedBySupport) p.notes_locked = true;
+        p.locked = !!(p.presence_locked && p.notes_locked);
       }
       if (presences.length) await this.presenceRepo.save(presences);
     }
@@ -507,7 +532,8 @@ export class StudentsPlanningsService {
       where: { student_planning_id: id, company_id: companyId },
     });
     for (const p of presences) {
-      p.locked = true;
+      p.presence_locked = true;
+      p.locked = !!(p.presence_locked && p.notes_locked);
     }
     if (presences.length) await this.presenceRepo.save(presences);
     return this.findOne(id, companyId);
@@ -525,7 +551,8 @@ export class StudentsPlanningsService {
       where: { student_planning_id: id, company_id: companyId },
     });
     for (const p of presences) {
-      p.locked = true;
+      p.notes_locked = true;
+      p.locked = !!(p.presence_locked && p.notes_locked);
     }
     if (presences.length) await this.presenceRepo.save(presences);
     return { message: 'Notes locked successfully' };
@@ -790,6 +817,7 @@ export class StudentsPlanningsService {
             status: sourcePlanning.status,
             is_duplicated: true,
             duplication_source_id: sourcePlanning.id,
+            hasNotes: sourcePlanning.hasNotes ?? false,
           };
 
           const created = this.repo.create(planningData);

@@ -1,4 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+  AfterLoad,
+} from 'typeorm';
 import { Teacher } from '../../teachers/entities/teacher.entity';
 import { ClassEntity } from '../../class/entities/class.entity';
 import { ClassRoom } from '../../class-rooms/entities/class-room.entity';
@@ -112,6 +121,22 @@ export class StudentsPlanning {
 
   @Column({ type: 'boolean', default: false, name: 'notes_validated_controleur' })
   notes_validated_controleur: boolean;
+
+  /**
+   * Not persisted. True when scholarity/support locked presence (contrôleur). Teacher validation optional.
+   */
+  presence_done?: boolean;
+
+  /**
+   * Not persisted. True when scholarity/support locked notes. Teacher notes validation optional.
+   */
+  notes_done?: boolean;
+
+  @AfterLoad()
+  computeWorkflowDoneFlags(): void {
+    this.presence_done = !!this.presence_validated_controleur;
+    this.notes_done = !!this.notes_validated_controleur;
+  }
 
   @CreateDateColumn()
   created_at: Date;

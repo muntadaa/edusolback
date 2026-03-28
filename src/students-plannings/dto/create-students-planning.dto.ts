@@ -123,6 +123,13 @@ export class CreateStudentsPlanningDto {
   @IsBoolean()
   has_notes?: boolean;
 
+  /** Alias for hasNotes / has_notes (short name). */
+  @ApiPropertyOptional({ description: 'Whether the session has notes (alias for hasNotes)', example: false })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  has_note?: boolean;
+
   /** Presence validation: 0=DRAFT, 1=TEACHER_VALIDATED, 2=LOCKED. Default 0. */
   @ApiPropertyOptional({ description: 'Presence validation status: 0=DRAFT, 1=TEACHER_VALIDATED, 2=LOCKED', enum: [0, 1, 2], default: 0 })
   @IsOptional()
@@ -139,25 +146,41 @@ export class CreateStudentsPlanningDto {
   @IsIn([0, 1, 2])
   notes_validation_status?: number;
 
-  @ApiPropertyOptional({ description: 'True when teacher has validated presence (activated)', default: false })
+  @ApiPropertyOptional({
+    description:
+      'Teacher validated presence (intermediate). Scholarity/support must still lock presence for final lock unless scholarity locks presence alone.',
+    default: false,
+  })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   presence_validated_teacher?: boolean;
 
-  @ApiPropertyOptional({ description: 'True when controller has validated presence (final)', default: false })
+  @ApiPropertyOptional({
+    description:
+      'Scholarity/support final lock on presence. May be set without teacher validation. Locks attendance when true.',
+    default: false,
+  })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   presence_validated_controleur?: boolean;
 
-  @ApiPropertyOptional({ description: 'True when teacher has validated notes. Only when has_notes.', default: false })
+  @ApiPropertyOptional({
+    description:
+      'Teacher validated notes (intermediate). Requires presence addressed first (teacher or scholarity). Scholarity must still lock notes for final unless scholarity locks notes alone.',
+    default: false,
+  })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   notes_validated_teacher?: boolean;
 
-  @ApiPropertyOptional({ description: 'True when controller has validated notes (final). Only when has_notes.', default: false })
+  @ApiPropertyOptional({
+    description:
+      'Scholarity/support final lock on notes. May be set without teacher notes validation. Only when has_notes.',
+    default: false,
+  })
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()

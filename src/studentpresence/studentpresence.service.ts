@@ -11,6 +11,9 @@ import { Student } from '../students/entities/student.entity';
 import { StudentsPlanning } from '../students-plannings/entities/students-planning.entity';
 import { StudentReport } from '../student-report/entities/student-report.entity';
 
+/** Matches StudentsPlanningsService SESSION_STATUS_ACTIVATED — session marked activated (attendance locked). */
+const PLANNING_SESSION_ACTIVATED = 3;
+
 @Injectable()
 export class StudentPresenceService {
   constructor(
@@ -23,6 +26,60 @@ export class StudentPresenceService {
     @InjectRepository(StudentReport)
     private readonly reportRepo: Repository<StudentReport>,
   ) {}
+
+  private touchesNoteFields(dto: Record<string, unknown>): boolean {
+    return (
+      dto.note !== undefined ||
+      dto.remarks !== undefined ||
+      dto.report_id !== undefined ||
+      dto.validate_report !== undefined
+    );
+  }
+
+  /** Blocks edits to presence only (session activation / scholarity / row presence lock). */
+  private ensurePresenceFieldsEditable(planning: StudentsPlanning, existing: StudentPresence | null): void {
+    if (planning.status === PLANNING_SESSION_ACTIVATED) {
+      throw new BadRequestException('This session is activated; attendance cannot be changed.');
+    }
+    if (planning.presence_validated_controleur) {
+      throw new BadRequestException(
+        'Presence for this session is finalized by scholarity/support. It cannot be changed.',
+      );
+    }
+    if (existing?.presence_locked) {
+      throw new BadRequestException('Presence for this row is locked and cannot be changed.');
+    }
+  }
+
+  private ensureNoteFieldsEditable(planning: StudentsPlanning, existing: StudentPresence | null): void {
+    if (planning.notes_validated_controleur) {
+      throw new BadRequestException(
+        'Notes for this session are finalized by scholarity/support. They cannot be changed.',
+      );
+    }
+    if (existing?.notes_locked) {
+      throw new BadRequestException('Notes for this row are locked and cannot be changed.');
+    }
+  }
+
+  private ensurePresenceEditableIfTouched(
+    planning: StudentsPlanning,
+    existing: StudentPresence | null,
+    dto: Record<string, unknown>,
+  ): void {
+    const isNewRow = !existing;
+    if (!isNewRow && dto.presence === undefined) return;
+    this.ensurePresenceFieldsEditable(planning, existing);
+  }
+
+  private ensureNoteFieldsEditableIfTouched(
+    planning: StudentsPlanning,
+    existing: StudentPresence | null,
+    dto: Record<string, unknown>,
+  ): void {
+    if (!this.touchesNoteFields(dto)) return;
+    this.ensureNoteFieldsEditable(planning, existing);
+  }
 
   /**
    * Create or update presence: one row per (student_id, student_planning_id).
@@ -56,6 +113,9 @@ export class StudentPresenceService {
       },
       relations: ['student', 'studentPlanning', 'company', 'studentReport'],
     });
+
+    this.ensurePresenceEditableIfTouched(planning, existing, dto as unknown as Record<string, unknown>);
+    this.ensureNoteFieldsEditableIfTouched(planning, existing, dto as unknown as Record<string, unknown>);
 
     if (existing) {
       const report = dto.report_id !== undefined ? await this.validateStudentReport(dto.report_id, companyId, dto.student_id) : null;
@@ -166,15 +226,15 @@ export class StudentPresenceService {
       }
     }
 
-    // If student_planning_id is being updated, verify it belongs to the same company
-    if (dto.student_planning_id !== undefined) {
-      const planning = await this.planningRepo.findOne({
-        where: { id: dto.student_planning_id, company_id: companyId, status: Not(-2) },
-      });
-      if (!planning) {
-        throw new NotFoundException(`Student planning with ID ${dto.student_planning_id} not found or does not belong to your company`);
-      }
+    const targetPlanningId = dto.student_planning_id ?? existing.student_planning_id;
+    const planning = await this.planningRepo.findOne({
+      where: { id: targetPlanningId, company_id: companyId, status: Not(-2) },
+    });
+    if (!planning) {
+      throw new NotFoundException(`Student planning with ID ${targetPlanningId} not found or does not belong to your company`);
     }
+    this.ensurePresenceEditableIfTouched(planning, existing, dto as unknown as Record<string, unknown>);
+    this.ensureNoteFieldsEditableIfTouched(planning, existing, dto as unknown as Record<string, unknown>);
 
     // If report_id is being updated, verify it belongs to the student & company
     let validatedReport: StudentReport | undefined;

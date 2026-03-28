@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { CreateStudentReportDetailDto } from './dto/create-student-report-detail.dto';
+import { CreateManyStudentReportDetailsDto } from './dto/create-many-student-report-details.dto';
 import { UpdateStudentReportDetailDto } from './dto/update-student-report-detail.dto';
 import { StudentReportDetail } from './entities/student-report-detail.entity';
 import { StudentReportDetailQueryDto } from './dto/student-report-detail-query.dto';
@@ -63,6 +64,77 @@ export class StudentReportDetailService {
     });
     const saved = await this.repo.save(entity);
     return this.findOne(saved.id, companyId);
+  }
+
+  /**
+   * Create many detail rows for one student report in a single transaction.
+   * Validates all referenced teachers and courses (batch) before insert.
+   */
+  async createMany(dto: CreateManyStudentReportDetailsDto, companyId: number): Promise<StudentReportDetail[]> {
+    const { student_report_id, details } = dto;
+
+    const studentReport = await this.studentReportRepo.findOne({
+      where: { id: student_report_id, status: Not(-2) },
+      relations: ['student'],
+    });
+    if (!studentReport) {
+      throw new NotFoundException(`Student report with ID ${student_report_id} not found`);
+    }
+    if (studentReport.company_id !== companyId) {
+      throw new BadRequestException('Student report does not belong to your company');
+    }
+
+    const teacherIdSet = new Set<number>();
+    const courseIdSet = new Set<number>();
+    for (const item of details) {
+      if (item.teacher_id != null && item.teacher_id !== undefined) {
+        teacherIdSet.add(Number(item.teacher_id));
+      }
+      if (item.course_id != null && item.course_id !== undefined) {
+        courseIdSet.add(Number(item.course_id));
+      }
+    }
+
+    const teacherIds = [...teacherIdSet];
+    if (teacherIds.length > 0) {
+      const teachers = await this.teacherRepo.find({
+        where: { id: In(teacherIds), company_id: companyId, status: Not(-2) },
+      });
+      if (teachers.length !== teacherIds.length) {
+        throw new BadRequestException('One or more teachers were not found or do not belong to your company');
+      }
+    }
+
+    const courseIds = [...courseIdSet];
+    if (courseIds.length > 0) {
+      const courses = await this.courseRepo.find({
+        where: { id: In(courseIds), company_id: companyId, status: Not(-2) },
+      });
+      if (courses.length !== courseIds.length) {
+        throw new BadRequestException('One or more courses were not found or do not belong to your company');
+      }
+    }
+
+    return this.repo.manager.transaction(async (em) => {
+      const detailRepo = em.getRepository(StudentReportDetail);
+      const entities = details.map((item) =>
+        detailRepo.create({
+          student_report_id,
+          teacher_id: item.teacher_id ?? null,
+          course_id: item.course_id ?? null,
+          remarks: item.remarks,
+          note: item.note,
+          status: item.status ?? 2,
+        }),
+      );
+      const saved = await detailRepo.save(entities);
+      const ids = saved.map((r) => r.id);
+      return detailRepo.find({
+        where: { id: In(ids) },
+        relations: ['studentReport', 'studentReport.student', 'teacher', 'course'],
+        order: { id: 'ASC' },
+      });
+    });
   }
 
   async findAll(query: StudentReportDetailQueryDto, companyId: number): Promise<PaginatedResponseDto<StudentReportDetail>> {

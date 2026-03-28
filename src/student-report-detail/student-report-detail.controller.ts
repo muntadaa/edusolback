@@ -1,7 +1,8 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
-import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiCreatedResponse, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { StudentReportDetailService } from './student-report-detail.service';
 import { CreateStudentReportDetailDto } from './dto/create-student-report-detail.dto';
+import { CreateManyStudentReportDetailsDto } from './dto/create-many-student-report-details.dto';
 import { UpdateStudentReportDetailDto } from './dto/update-student-report-detail.dto';
 import { StudentReportDetailQueryDto } from './dto/student-report-detail-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -21,6 +22,18 @@ export class StudentReportDetailController {
       throw new BadRequestException('User must belong to a company');
     }
     return this.studentReportDetailService.create(dto, companyId);
+  }
+
+  @Post('batch')
+  @UseGuards(JwtAuthGuard)
+  @ApiCreatedResponse({ description: 'All lines created; returns full detail rows with relations (same shape as GET one).' })
+  @ApiResponse({ status: 400, description: 'Invalid teacher/course ids or empty batch.' })
+  createMany(@Request() req, @Body() dto: CreateManyStudentReportDetailsDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.studentReportDetailService.createMany(dto, companyId);
   }
 
   @Get()

@@ -51,7 +51,11 @@ export class StudentsPlanningsController {
 
   @Post(':id/notes/validate')
   @UseGuards(JwtAuthGuard)
-  @ApiResponse({ status: 200, description: 'Validate and lock all notes for this session. Only allowed when hasNotes === true.' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Sets `notes_locked` on every student_presence row for this session (note fields only). Does not set `presence_locked`. Only when hasNotes === true.',
+  })
   validateNotes(@Request() req, @Param('id', ParseIntPipe) id: number) {
     const companyId = req.user.company_id;
     if (!companyId) {
@@ -62,7 +66,11 @@ export class StudentsPlanningsController {
 
   @Post(':id/activate')
   @UseGuards(JwtAuthGuard)
-  @ApiResponse({ status: 200, description: 'Activate session: lock presence and set session status to ACTIVATED. Does not check notes.' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Sets session status to ACTIVATED and `presence_locked` on each attendance row (presence column only). Does not set `notes_locked` or validate notes.',
+  })
   activateSession(@Request() req, @Param('id', ParseIntPipe) id: number) {
     const companyId = req.user.company_id;
     if (!companyId) {

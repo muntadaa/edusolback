@@ -32,7 +32,7 @@ export class StudentReportDetail {
   @Column({ type: 'longtext', nullable: true })
   remarks?: string;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ type: 'double', nullable: true })
   note?: number;
 
   @Column({ type: 'int', default: 2, name: 'statut' })

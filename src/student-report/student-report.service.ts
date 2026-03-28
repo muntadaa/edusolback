@@ -11,6 +11,7 @@ import { Student } from '../students/entities/student.entity';
 import { SchoolYearPeriod } from '../school-year-periods/entities/school-year-period.entity';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
 import { ReportDashboardQueryDto } from './dto/report-dashboard-query.dto';
+import { CourseNotesAggregateQueryDto } from './dto/course-notes-aggregate-query.dto';
 import { ClassStudent } from '../class-student/entities/class-student.entity';
 import { StudentsPlanning } from '../students-plannings/entities/students-planning.entity';
 import { StudentPresence } from '../studentpresence/entities/studentpresence.entity';
@@ -367,5 +368,211 @@ export class StudentReportService {
       sessions,
       presences,
     };
+  }
+
+  /**
+   * Aggregated course notes per student for the Courses & notes screen.
+   * Groups by (student_id, course_id, teacher_id) — Option A: separate rows per teacher when the same course has multiple teachers.
+   * Planning scope matches getDashboard (class + school year + period label on planning).
+   */
+  async getCourseNotesAggregates(query: CourseNotesAggregateQueryDto, companyId: number) {
+    const {
+      class_id,
+      school_year_id,
+      school_year_period_id,
+      period_label,
+      student_ids,
+      course_ids,
+      teacher_ids,
+      sort,
+    } = query;
+
+    const schoolYear = await this.schoolYearRepo.findOne({
+      where: { id: school_year_id, status: Not(-2) },
+      relations: ['company'],
+    });
+    if (!schoolYear) {
+      throw new NotFoundException(`School year with ID ${school_year_id} not found`);
+    }
+    if (schoolYear.company?.id !== companyId) {
+      throw new BadRequestException('School year does not belong to your company');
+    }
+
+    const period = await this.periodRepo.findOne({
+      where: { id: school_year_period_id, company_id: companyId, status: Not(-2) },
+    });
+    if (!period) {
+      throw new NotFoundException(
+        `School year period with ID ${school_year_period_id} not found or does not belong to your company`,
+      );
+    }
+    if (period.school_year_id !== school_year_id) {
+      throw new BadRequestException('School year period does not belong to the provided school year');
+    }
+
+    const effectivePeriodLabel = period_label ?? period.title;
+    const deleted = -2;
+
+    const sumNotesExpr = 'SUM(CASE WHEN sp.note > -1 THEN sp.note ELSE 0 END)';
+    const gradedCountExpr = 'SUM(CASE WHEN sp.note > -1 THEN 1 ELSE 0 END)';
+
+    const qb = this.presenceRepo
+      .createQueryBuilder('sp')
+      .innerJoin('sp.studentPlanning', 'p')
+      .innerJoin('sp.student', 'stu')
+      .innerJoin('p.course', 'c')
+      .innerJoin('p.teacher', 't')
+      .innerJoin(
+        ClassStudent,
+        'cs',
+        'cs.student_id = sp.student_id AND cs.class_id = :classId AND cs.company_id = :companyId AND cs.status <> :deleted',
+      )
+      .leftJoin('p.classCourse', 'cc')
+      .leftJoin('cc.module', 'mo')
+      .where('p.class_id = :classId', { classId: class_id })
+      .andWhere('sp.company_id = :companyId', { companyId })
+      .andWhere('p.company_id = :companyId')
+      .andWhere('stu.company_id = :companyId')
+      .andWhere('c.company_id = :companyId')
+      .andWhere('t.company_id = :companyId')
+      .andWhere('sp.status <> :deleted', { deleted })
+      .andWhere('p.status <> :deleted')
+      .andWhere(
+        '(p.school_year_id = :schoolYearId OR (p.school_year_id IS NULL AND p.period = :periodLabel))',
+        { schoolYearId: school_year_id, periodLabel: effectivePeriodLabel },
+      );
+
+    if (student_ids?.length) {
+      qb.andWhere('sp.student_id IN (:...studentIds)', { studentIds: student_ids });
+    }
+    if (course_ids?.length) {
+      qb.andWhere('p.course_id IN (:...courseIds)', { courseIds: course_ids });
+    }
+    if (teacher_ids?.length) {
+      qb.andWhere('p.teacher_id IN (:...teacherIds)', { teacherIds: teacher_ids });
+    }
+
+    qb
+      .select('sp.student_id', 'student_id')
+      .addSelect('p.course_id', 'course_id')
+      .addSelect('p.teacher_id', 'teacher_id')
+      .addSelect('COUNT(sp.id)', 'session_count')
+      .addSelect(sumNotesExpr, 'notes_sum')
+      .addSelect(gradedCountExpr, 'graded_session_count')
+      .addSelect(`CASE WHEN (${gradedCountExpr}) > 0 THEN (${sumNotesExpr}) / (${gradedCountExpr}) ELSE NULL END`, 'notes_avg')
+      .addSelect('MAX(stu.first_name)', 'student_first_name')
+      .addSelect('MAX(stu.last_name)', 'student_last_name')
+      .addSelect('MAX(stu.picture)', 'student_picture')
+      .addSelect('MAX(c.title)', 'course_title')
+      .addSelect('MAX(t.first_name)', 'teacher_first_name')
+      .addSelect('MAX(t.last_name)', 'teacher_last_name')
+      .addSelect('MAX(cc.module_id)', 'module_id')
+      .addSelect('MAX(mo.title)', 'module_title')
+      .groupBy('sp.student_id')
+      .addGroupBy('p.course_id')
+      .addGroupBy('p.teacher_id');
+
+    const orderParts = this.parseCourseNotesSort(sort, sumNotesExpr, gradedCountExpr);
+    for (const { expr, dir } of orderParts) {
+      qb.addOrderBy(expr, dir);
+    }
+
+    const raw = await qb.getRawMany();
+
+    const rows = raw.map((r) => {
+      const sessionCount = Number(r.session_count) || 0;
+      const notesSum = Number(r.notes_sum) || 0;
+      const graded = Number(r.graded_session_count) || 0;
+      const notesAvgRaw = r.notes_avg;
+      const notesAvg =
+        notesAvgRaw !== null && notesAvgRaw !== undefined && String(notesAvgRaw) !== ''
+          ? Number(notesAvgRaw)
+          : null;
+
+      return {
+        student_id: Number(r.student_id),
+        student: {
+          first_name: String(r.student_first_name ?? ''),
+          last_name: String(r.student_last_name ?? ''),
+          picture: r.student_picture ?? null,
+        },
+        course_id: Number(r.course_id),
+        course: {
+          id: Number(r.course_id),
+          title: String(r.course_title ?? ''),
+          code: null as string | null,
+        },
+        teacher_id: Number(r.teacher_id),
+        teacher: {
+          id: Number(r.teacher_id),
+          first_name: String(r.teacher_first_name ?? ''),
+          last_name: String(r.teacher_last_name ?? ''),
+        },
+        module_id: r.module_id != null && r.module_id !== '' ? Number(r.module_id) : null,
+        module_title: r.module_title != null && r.module_title !== '' ? String(r.module_title) : null,
+        session_count: sessionCount,
+        notes_sum: notesSum,
+        notes_avg: graded > 0 && notesAvg !== null && !Number.isNaN(notesAvg) ? notesAvg : null,
+        graded_session_count: graded,
+      };
+    });
+
+    return {
+      filters: {
+        class_id,
+        school_year_id,
+        school_year_period_id,
+        period_label: effectivePeriodLabel,
+        student_ids: student_ids?.length ? [...student_ids] : undefined,
+        course_ids: course_ids?.length ? [...course_ids] : undefined,
+        teacher_ids: teacher_ids?.length ? [...teacher_ids] : undefined,
+        sort: sort?.trim() || null,
+        group_by: 'student_id,course_id,teacher_id',
+      },
+      rows,
+      aggregation_rules:
+        'session_count = COUNT(presence rows) in group. notes_sum = SUM(note) with note <= -1 treated as 0. graded_session_count = sessions with note > -1. notes_avg = notes_sum / graded_session_count when graded_session_count > 0, else null. Planning scope matches GET /student-reports/dashboard (class, school year, period label on planning row).',
+    };
+  }
+
+  private parseCourseNotesSort(
+    sort: string | undefined,
+    sumNotesExpr: string,
+    gradedCountExpr: string,
+  ): Array<{ expr: string; dir: 'ASC' | 'DESC' }> {
+    const defaults: Array<{ expr: string; dir: 'ASC' | 'DESC' }> = [
+      { expr: 'MAX(stu.last_name)', dir: 'ASC' },
+      { expr: 'MAX(stu.first_name)', dir: 'ASC' },
+      { expr: 'MAX(c.title)', dir: 'ASC' },
+      { expr: 'p.teacher_id', dir: 'ASC' },
+    ];
+    if (!sort?.trim()) return defaults;
+
+    const notesAvgExpr = `CASE WHEN (${gradedCountExpr}) > 0 THEN (${sumNotesExpr}) / (${gradedCountExpr}) ELSE NULL END`;
+
+    const keyToExpr: Record<string, string | string[]> = {
+      student_name: ['MAX(stu.last_name)', 'MAX(stu.first_name)'],
+      course_title: 'MAX(c.title)',
+      teacher_name: ['MAX(t.last_name)', 'MAX(t.first_name)'],
+      session_count: 'COUNT(sp.id)',
+      notes_sum: sumNotesExpr,
+      notes_avg: notesAvgExpr,
+    };
+
+    const out: Array<{ expr: string; dir: 'ASC' | 'DESC' }> = [];
+    for (const part of sort.split(',')) {
+      const token = part.trim();
+      if (!token) continue;
+      const [rawKey, dirRaw] = token.split(':').map((s) => s.trim());
+      const dir = dirRaw?.toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+      const exprs = keyToExpr[rawKey];
+      if (!exprs) continue;
+      if (Array.isArray(exprs)) {
+        for (const e of exprs) out.push({ expr: e, dir });
+      } else {
+        out.push({ expr: exprs, dir });
+      }
+    }
+    return out.length ? out : defaults;
   }
 }
