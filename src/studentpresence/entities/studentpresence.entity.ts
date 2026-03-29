@@ -3,6 +3,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -17,6 +18,10 @@ import { StudentReport } from '../../student-report/entities/student-report.enti
 /** One row per (student, session): single source of truth for teacher and controller. */
 @Entity('student_presence')
 @Unique('UQ_student_presence_student_planning', ['student_id', 'student_planning_id'])
+@Index('IDX_student_presence_planning_validate_report', [
+  'student_planning_id',
+  'validate_report',
+])
 export class StudentPresence {
   @PrimaryGeneratedColumn()
   id: number;

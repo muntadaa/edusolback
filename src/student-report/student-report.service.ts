@@ -15,6 +15,10 @@ import { CourseNotesAggregateQueryDto } from './dto/course-notes-aggregate-query
 import { ClassStudent } from '../class-student/entities/class-student.entity';
 import { StudentsPlanning } from '../students-plannings/entities/students-planning.entity';
 import { StudentPresence } from '../studentpresence/entities/studentpresence.entity';
+import {
+  StudentPresenceValidation,
+  StudentPresenceValidationStatus,
+} from '../student_presence_validation/entities/student_presence_validation.entity';
 
 @Injectable()
 export class StudentReportService {
@@ -198,6 +202,36 @@ export class StudentReportService {
     const existing = await this.findOne(id, companyId);
     existing.status = -2;
     await this.repo.save(existing);
+  }
+
+  /**
+   * planning_students.id must belong to company, match class, and match school year / period label (same as list filters).
+   */
+  private async assertStudentPlanningMatchesReportScope(
+    studentPlanningId: number,
+    classId: number,
+    schoolYearId: number,
+    effectivePeriodLabel: string,
+    companyId: number,
+  ): Promise<StudentsPlanning> {
+    const p = await this.planningRepo.findOne({
+      where: { id: studentPlanningId, company_id: companyId, status: Not(-2) },
+    });
+    if (!p) {
+      throw new NotFoundException(`Planning session with ID ${studentPlanningId} not found`);
+    }
+    if (p.class_id !== classId) {
+      throw new BadRequestException('student_planning_id does not match class_id');
+    }
+    const yearOk =
+      p.school_year_id === schoolYearId ||
+      (p.school_year_id == null && p.period === effectivePeriodLabel);
+    if (!yearOk) {
+      throw new BadRequestException(
+        'student_planning_id does not match the requested school year / period (planning.school_year_id or planning.period)',
+      );
+    }
+    return p;
   }
 
   async getDashboard(query: ReportDashboardQueryDto, companyId: number): Promise<{
@@ -423,6 +457,12 @@ export class StudentReportService {
       .innerJoin('p.course', 'c')
       .innerJoin('p.teacher', 't')
       .innerJoin(
+        StudentPresenceValidation,
+        'spv',
+        'spv.student_presence_id = sp.id AND spv.status = :approvalStatus',
+        { approvalStatus: StudentPresenceValidationStatus.APPROVED },
+      )
+      .innerJoin(
         ClassStudent,
         'cs',
         'cs.student_id = sp.student_id AND cs.class_id = :classId AND cs.company_id = :companyId AND cs.status <> :deleted',
@@ -528,10 +568,11 @@ export class StudentReportService {
         teacher_ids: teacher_ids?.length ? [...teacher_ids] : undefined,
         sort: sort?.trim() || null,
         group_by: 'student_id,course_id,teacher_id',
+        only_approved_presence_validation: true,
       },
       rows,
       aggregation_rules:
-        'session_count = COUNT(presence rows) in group. notes_sum = SUM(note) with note <= -1 treated as 0. graded_session_count = sessions with note > -1. notes_avg = notes_sum / graded_session_count when graded_session_count > 0, else null. Planning scope matches GET /student-reports/dashboard (class, school year, period label on planning row).',
+        'Only student_presence rows with student_presence_validation.status = approved are included. session_count = COUNT(presence rows) in group. notes_sum = SUM(note) with note <= -1 treated as 0. graded_session_count = sessions with note > -1. notes_avg = notes_sum / graded_session_count when graded_session_count > 0, else null. Planning scope matches GET /student-reports/dashboard (class, school year, period label on planning row).',
     };
   }
 

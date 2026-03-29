@@ -9,9 +9,21 @@ import { SchoolYear } from '../school-years/entities/school-year.entity';
 import { StudentsPlanning } from '../students-plannings/entities/students-planning.entity';
 import { StudentPresence } from '../studentpresence/entities/studentpresence.entity';
 import { ClassStudent } from '../class-student/entities/class-student.entity';
+import { StudentPresenceValidation } from '../student_presence_validation/entities/student_presence_validation.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([StudentReport, Student, SchoolYearPeriod, SchoolYear, StudentsPlanning, StudentPresence, ClassStudent])],
+  imports: [
+    TypeOrmModule.forFeature([
+      StudentReport,
+      Student,
+      SchoolYearPeriod,
+      SchoolYear,
+      StudentsPlanning,
+      StudentPresence,
+      StudentPresenceValidation,
+      ClassStudent,
+    ]),
+  ],
   controllers: [StudentReportController],
   providers: [StudentReportService],
   exports: [StudentReportService],

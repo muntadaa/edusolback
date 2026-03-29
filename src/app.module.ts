@@ -51,6 +51,7 @@ import { StudentPaymentDetailsModule } from './student_payment_details/student_p
 import { StudentPaymentAllocationsModule } from './student_payment_allocations/student_payment_allocations.module';
 import { StudentAccountingModule } from './student-accounting/student-accounting.module';
 import { PreInscriptionDiplomaModule } from './pre-inscription-diploma/pre-inscription-diploma.module';
+import { StudentPresenceValidationModule } from './student_presence_validation/student_presence_validation.module';
 
 @Module({
   imports: [
@@ -114,6 +115,7 @@ import { PreInscriptionDiplomaModule } from './pre-inscription-diploma/pre-inscr
     StudentPaymentAllocationsModule,
     StudentAccountingModule,
     PreInscriptionDiplomaModule,
+    StudentPresenceValidationModule,
   ],
   controllers: [AppController],
   providers: [

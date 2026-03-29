@@ -17,6 +17,7 @@ import { ClassCourse } from '../class-course/entities/class-course.entity';
 import { DuplicatePlanningDto, DuplicationType } from './dto/duplicate-planning.dto';
 import { StudentPresence } from '../studentpresence/entities/studentpresence.entity';
 import { Event } from '../events/entities/event.entity';
+import { StudentPresenceValidationService } from '../student_presence_validation/student_presence_validation.service';
 
 /** Session status: 3 = ACTIVATED (legacy); 1 = ACTIVATED per teacher/controller spec */
 export const SESSION_STATUS_ACTIVATED = 3;
@@ -49,7 +50,15 @@ export class StudentsPlanningsService {
     private readonly presenceRepo: Repository<StudentPresence>,
     @InjectRepository(Event)
     private readonly eventRepo: Repository<Event>,
+    private readonly presenceValidationService: StudentPresenceValidationService,
   ) {}
+
+  /** One validation row per presence; idempotent. Called after teacher or scholarity locks session notes. */
+  private async createValidationsForSessionPresences(presences: StudentPresence[]): Promise<void> {
+    for (const p of presences) {
+      await this.presenceValidationService.createValidationForPresence(p.id);
+    }
+  }
 
   async create(dto: CreateStudentsPlanningDto, companyId: number): Promise<StudentsPlanning> {
     // Verify teacher exists and belongs to the same company
@@ -510,6 +519,9 @@ export class StudentsPlanningsService {
         p.locked = !!(p.presence_locked && p.notes_locked);
       }
       if (presences.length) await this.presenceRepo.save(presences);
+      if (notesLockedBySupport) {
+        await this.createValidationsForSessionPresences(presences);
+      }
     }
 
     return this.findOne(id, companyId);
@@ -555,6 +567,7 @@ export class StudentsPlanningsService {
       p.locked = !!(p.presence_locked && p.notes_locked);
     }
     if (presences.length) await this.presenceRepo.save(presences);
+    await this.createValidationsForSessionPresences(presences);
     return { message: 'Notes locked successfully' };
   }
 

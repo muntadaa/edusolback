@@ -1,6 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PagesService } from '../../pages/pages.service';
+import { PAGE_ROUTE_METADATA_KEY } from '../../common/decorators/require-page-route.decorator';
 
 @Injectable()
 export class RouteAccessGuard implements CanActivate {
@@ -12,11 +13,9 @@ export class RouteAccessGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Get route metadata (if set)
-    const requiredRoute = this.reflector.get<string>('route', context.getHandler());
-    
-    // If no route metadata, skip this guard (not all routes need route-based protection)
-    if (!requiredRoute) {
+    const requiredPageRoute = this.reflector.get<string>(PAGE_ROUTE_METADATA_KEY, context.getHandler());
+
+    if (!requiredPageRoute) {
       return true;
     }
 
@@ -27,25 +26,27 @@ export class RouteAccessGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
-    const profile = user.profile;
-    const requestedRoute = request.path || requiredRoute;
-
     const companyId = user.company_id;
     if (!companyId) {
       throw new ForbiddenException('User must belong to a company');
     }
 
-    // Admin has access to everything in their company
-    if (profile === 'admin') {
-      return true;
+    const roleIds = (user.userRoles ?? [])
+      .map((ur: { role_id?: number }) => ur.role_id)
+      .filter((id: number | undefined): id is number => typeof id === 'number' && id > 0);
+
+    if (roleIds.length === 0) {
+      this.logger.warn(`User ${user.id} has no roles; denied page route '${requiredPageRoute}'`);
+      throw new ForbiddenException('You do not have access to perform this action');
     }
 
-    // Check if user's profile has access to this route in their company
-    const hasAccess = await this.pagesService.hasAccessToRoute(profile, requestedRoute, companyId);
+    const hasAccess = await this.pagesService.hasAccessToRoute(roleIds, requiredPageRoute, companyId);
 
     if (!hasAccess) {
-      this.logger.warn(`User ${user.id} with profile '${profile}' attempted to access route '${requestedRoute}' in company ${companyId}`);
-      throw new ForbiddenException(`You do not have access to this route: ${requestedRoute}`);
+      this.logger.warn(
+        `User ${user.id} denied: missing page route '${requiredPageRoute}' in company ${companyId}`,
+      );
+      throw new ForbiddenException(`You do not have access to this page: ${requiredPageRoute}`);
     }
 
     return true;
