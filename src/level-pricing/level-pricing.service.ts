@@ -235,6 +235,13 @@ export class LevelPricingService {
     const effectiveAmountTtc = Number(
       (effectiveAmount * (1 + effectiveVatRate / 100)).toFixed(2),
     );
+    const effectiveEveryMonth = pricing.every_month ?? pricing.rubrique?.every_month ?? 0;
+    const fromPricingOcc = Math.max(pricing.occurrences ?? pricing.rubrique?.occurrences ?? 1, 1);
+    const levelMonths = pricing.level?.durationMonths;
+    const effectiveOccurrences =
+      effectiveEveryMonth === 1 && levelMonths != null && levelMonths > 0
+        ? levelMonths
+        : fromPricingOcc;
 
     return {
       ...pricing,
@@ -242,8 +249,8 @@ export class LevelPricingService {
       effective_amount: effectiveAmount,
       effective_vat_rate: effectiveVatRate,
       effective_amount_ttc: effectiveAmountTtc,
-      effective_occurrences: pricing.occurrences ?? pricing.rubrique?.occurrences ?? 1,
-      effective_every_month: pricing.every_month ?? pricing.rubrique?.every_month ?? 0,
+      effective_occurrences: effectiveOccurrences,
+      effective_every_month: effectiveEveryMonth,
     };
   }
 }

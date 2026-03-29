@@ -7,6 +7,7 @@ import { Student } from '../students/entities/student.entity';
 import { StudentDiplome } from '../student-diplome/entities/student-diplome.entity';
 import { StudentPaymentDetail } from '../student_payment_details/entities/student_payment_detail.entity';
 import { LevelPricing } from '../level-pricing/entities/level-pricing.entity';
+import { Level } from '../level/entities/level.entity';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
 import { ClassStudent } from '../class-student/entities/class-student.entity';
 import { canTransition } from './workflow/preinscription.workflow';
@@ -182,6 +183,11 @@ export class PreInscriptionConversionService {
     levelId: number,
     schoolYear: SchoolYear,
   ): Promise<void> {
+    const level = await manager.findOne(Level, {
+      where: { id: levelId, company_id: companyId, status: Not(-2) },
+    });
+    const levelDurationMonths = level?.durationMonths ?? null;
+
     const pricings = await manager.find(LevelPricing, {
       where: {
         company_id: companyId,
@@ -197,8 +203,13 @@ export class PreInscriptionConversionService {
       const title = pricing.title ?? pricing.rubrique?.title ?? null;
       const amountHt = Number(pricing.amount ?? pricing.rubrique?.amount ?? 0);
       const vatRate = pricing.vat_rate ?? pricing.rubrique?.vat_rate ?? 0;
-      const occurrences = Math.max(pricing.occurrences ?? pricing.rubrique?.occurrences ?? 1, 1);
       const everyMonth = pricing.every_month ?? pricing.rubrique?.every_month ?? 0;
+      const occurrences = this.resolveInstallmentCount(
+        everyMonth,
+        levelDurationMonths,
+        pricing.occurrences,
+        pricing.rubrique?.occurrences,
+      );
 
       if (!title || amountHt <= 0) {
         continue;
@@ -244,6 +255,22 @@ export class PreInscriptionConversionService {
         await manager.save(StudentPaymentDetail, detail);
       }
     }
+  }
+
+  private resolveInstallmentCount(
+    everyMonth: number,
+    levelDurationMonths: number | null | undefined,
+    pricingOccurrences: number | null | undefined,
+    rubriqueOccurrences: number | null | undefined,
+  ): number {
+    const fromPricing = Math.max(pricingOccurrences ?? rubriqueOccurrences ?? 1, 1);
+    if (everyMonth === 1) {
+      if (levelDurationMonths != null && levelDurationMonths > 0) {
+        return levelDurationMonths;
+      }
+      return fromPricing;
+    }
+    return fromPricing;
   }
 
   private computeDueDate(startDate: Date, monthOffset: number): string {

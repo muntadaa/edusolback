@@ -9,6 +9,7 @@ import { StudentPaymentDetail } from '../student_payment_details/entities/studen
 import { StudentPayment } from '../student-payment/entities/student-payment.entity';
 import { StudentPaymentAllocationsService } from '../student_payment_allocations/student_payment_allocations.service';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
+import { Level } from '../level/entities/level.entity';
 
 @Injectable()
 export class StudentAccountingService {
@@ -21,6 +22,8 @@ export class StudentAccountingService {
     private readonly classRepo: Repository<ClassEntity>,
     @InjectRepository(SchoolYear)
     private readonly schoolYearRepo: Repository<SchoolYear>,
+    @InjectRepository(Level)
+    private readonly levelRepo: Repository<Level>,
     @InjectRepository(LevelPricing)
     private readonly levelPricingRepo: Repository<LevelPricing>,
     @InjectRepository(StudentPaymentDetail)
@@ -207,6 +210,11 @@ export class StudentAccountingService {
         assignment.class = classEntity;
       }
 
+      const levelEntity = await this.levelRepo.findOne({
+        where: { id: assignment.class.level_id, company_id: companyId, status: Not(-2) },
+      });
+      const levelDurationMonths = levelEntity?.durationMonths ?? null;
+
       const levelPricings = await this.levelPricingRepo.find({
         where: {
           company_id: companyId,
@@ -224,11 +232,13 @@ export class StudentAccountingService {
         const effectiveTitle = pricing.title ?? pricing.rubrique?.title ?? null;
         const effectiveAmount = Number(pricing.amount ?? pricing.rubrique?.amount ?? 0);
         const effectiveVatRate = pricing.vat_rate ?? pricing.rubrique?.vat_rate ?? 0;
-        const effectiveOccurrences = Math.max(
-          pricing.occurrences ?? pricing.rubrique?.occurrences ?? 1,
-          1,
-        );
         const effectiveEveryMonth = pricing.every_month ?? pricing.rubrique?.every_month ?? 0;
+        const effectiveOccurrences = this.resolveInstallmentCount(
+          effectiveEveryMonth,
+          levelDurationMonths,
+          pricing.occurrences,
+          pricing.rubrique?.occurrences,
+        );
 
         if (!effectiveTitle || effectiveAmount <= 0) {
           continue;
@@ -290,6 +300,11 @@ export class StudentAccountingService {
     });
     const baseStartDate = schoolYear?.start_date ?? new Date();
 
+    const levelEntity = await this.levelRepo.findOne({
+      where: { id: assignment.level_id, company_id: companyId, status: Not(-2) },
+    });
+    const levelDurationMonths = levelEntity?.durationMonths ?? null;
+
     const levelPricings = await this.levelPricingRepo.find({
       where: {
         company_id: companyId,
@@ -307,11 +322,13 @@ export class StudentAccountingService {
       const effectiveTitle = pricing.title ?? pricing.rubrique?.title ?? null;
       const effectiveAmount = Number(pricing.amount ?? pricing.rubrique?.amount ?? 0);
       const effectiveVatRate = pricing.vat_rate ?? pricing.rubrique?.vat_rate ?? 0;
-      const effectiveOccurrences = Math.max(
-        pricing.occurrences ?? pricing.rubrique?.occurrences ?? 1,
-        1,
-      );
       const effectiveEveryMonth = pricing.every_month ?? pricing.rubrique?.every_month ?? 0;
+      const effectiveOccurrences = this.resolveInstallmentCount(
+        effectiveEveryMonth,
+        levelDurationMonths,
+        pricing.occurrences,
+        pricing.rubrique?.occurrences,
+      );
 
       if (!effectiveTitle || effectiveAmount <= 0) {
         continue;
@@ -375,6 +392,26 @@ export class StudentAccountingService {
     for (const payment of payments) {
       await this.allocationsService.reallocatePayment(payment.id, companyId);
     }
+  }
+
+  /**
+   * When `every_month` is set, installment count follows `levels.duration_months` if set;
+   * otherwise falls back to level_pricing / rubrique `occurrences`.
+   */
+  private resolveInstallmentCount(
+    everyMonth: number,
+    levelDurationMonths: number | null | undefined,
+    pricingOccurrences: number | null | undefined,
+    rubriqueOccurrences: number | null | undefined,
+  ): number {
+    const fromPricing = Math.max(pricingOccurrences ?? rubriqueOccurrences ?? 1, 1);
+    if (everyMonth === 1) {
+      if (levelDurationMonths != null && levelDurationMonths > 0) {
+        return levelDurationMonths;
+      }
+      return fromPricing;
+    }
+    return fromPricing;
   }
 
   private buildLineKey(studentId: number, pricingId: number, occurrenceIndex: number): string {

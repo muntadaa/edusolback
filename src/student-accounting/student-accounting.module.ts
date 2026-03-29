@@ -9,6 +9,7 @@ import { StudentPaymentDetail } from '../student_payment_details/entities/studen
 import { StudentPayment } from '../student-payment/entities/student-payment.entity';
 import { StudentPaymentAllocationsModule } from '../student_payment_allocations/student_payment_allocations.module';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
+import { Level } from '../level/entities/level.entity';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { SchoolYear } from '../school-years/entities/school-year.entity';
       ClassStudent,
       ClassEntity,
       SchoolYear,
+      Level,
       LevelPricing,
       StudentPaymentDetail,
       StudentPayment,
