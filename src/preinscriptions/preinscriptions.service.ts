@@ -1,7 +1,15 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  ForbiddenException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { Not, Repository, QueryFailedError } from 'typeorm';
 import { CreatePreinscriptionDto } from './dto/create-preinscription.dto';
+import { CreateCommercialPreinscriptionDto } from './dto/create-commercial-preinscription.dto';
 import { UpdatePreinscriptionDto } from './dto/update-preinscription.dto';
 import { PreInscription } from './entities/preinscription.entity';
 import { Company } from '../company/entities/company.entity';
@@ -109,6 +117,62 @@ export class PreinscriptionsService {
       company_id: company.id,
     };
     return this.create(payload);
+  }
+
+  /**
+   * Commercial Excel import: one dossier per call. Caller must have page access to `/preinscriptions/commercial`.
+   * Stores as the first workflow step: **NEW**, **commercial_id** null (same as public form create), not assigned yet.
+   */
+  async createByCommercial(
+    actorUserId: number,
+    companyId: number,
+    dto: CreateCommercialPreinscriptionDto,
+  ): Promise<PreInscription> {
+    const allowed = await this.userHasAccessToRoute(actorUserId, companyId, '/preinscriptions/commercial');
+    if (!allowed) {
+      throw new ForbiddenException('You do not have access to create commercial pre-registrations');
+    }
+
+    this.validateBirthDateNotFuture(dto.birth_date as any);
+
+    const emailNorm = dto.email.trim().toLowerCase();
+    const existing = await this.repo
+      .createQueryBuilder('pre')
+      .where('pre.company_id = :companyId', { companyId })
+      .andWhere('LOWER(TRIM(pre.email)) = :email', { email: emailNorm })
+      .getOne();
+    if (existing) {
+      throw new ConflictException('A pre-registration with this email already exists');
+    }
+
+    const entity = this.repo.create({
+      first_name: dto.first_name,
+      last_name: dto.last_name,
+      email: emailNorm,
+      whatsapp_phone: dto.whatsapp_phone,
+      nationality: dto.nationality,
+      city: dto.city,
+      address: dto.address ?? null,
+      birth_date: dto.birth_date ? (dto.birth_date as any) : null,
+      current_formation: (dto.current_formation ?? '').trim(),
+      desired_formation: (dto.desired_formation ?? '').trim(),
+      how_known: dto.how_known ?? null,
+      company_id: companyId,
+      commercial_id: null,
+      status: PreInscriptionStatus.NEW,
+    });
+
+    try {
+      return await this.repo.save(entity);
+    } catch (err) {
+      if (err instanceof QueryFailedError) {
+        const msg = err.message ?? '';
+        if (msg.includes('Duplicate') || msg.includes('duplicate') || msg.includes('UNIQUE')) {
+          throw new ConflictException('A pre-registration with this email already exists');
+        }
+      }
+      throw err;
+    }
   }
 
   /**

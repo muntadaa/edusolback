@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository, QueryFailedError } from 'typeorm';
+import { In, Not, Repository, QueryFailedError } from 'typeorm';
 import { CreateClassDto } from './dto/create-class.dto';
 import { UpdateClassDto } from './dto/update-class.dto';
 import { ClassEntity } from './entities/class.entity';
@@ -8,6 +8,9 @@ import { SchoolYear } from '../school-years/entities/school-year.entity';
 import { ClassQueryDto } from './dto/class-query.dto';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
+
+/** When `status` is omitted on batch create: pending (active is typically `1`). */
+const BATCH_CREATE_DEFAULT_STATUS = 2;
 
 @Injectable()
 export class ClassService {
@@ -20,27 +23,46 @@ export class ClassService {
     private schoolYearRepo: Repository<SchoolYear>,
   ) {}
 
-  async create(dto: CreateClassDto, companyId: number): Promise<ClassEntity> {
-    try {
-      // Validate that school year exists and is not completed
-      const schoolYear = await this.schoolYearRepo.findOne({
-        where: { 
-          id: dto.school_year_id, 
-          company_id: companyId,
-          status: Not(-2), // Not deleted
-        },
-      });
-
+  /**
+   * Ensures every school year id exists for the company, is not soft-deleted, and is not completed.
+   */
+  private async assertSchoolYearsAllowNewClasses(
+    schoolYearIds: number[],
+    companyId: number,
+  ): Promise<void> {
+    const unique = [...new Set(schoolYearIds)];
+    if (unique.length === 0) {
+      return;
+    }
+    const schoolYears = await this.schoolYearRepo.find({
+      where: {
+        id: In(unique),
+        company_id: companyId,
+        status: Not(-2),
+      },
+    });
+    const byId = new Map(schoolYears.map((sy) => [sy.id, sy]));
+    for (const id of unique) {
+      const schoolYear = byId.get(id);
       if (!schoolYear) {
-        throw new BadRequestException(`School year with ID ${dto.school_year_id} not found`);
+        throw new BadRequestException(`School year with ID ${id} not found`);
       }
-
       if (schoolYear.lifecycle_status === 'completed') {
         throw new BadRequestException(
           `Cannot create class: School year "${schoolYear.title}" is completed. ` +
-          `Completed school years cannot be used for new classes. Only planned or ongoing school years are allowed.`
+            `Completed school years cannot be used for new classes. Only planned or ongoing school years are allowed.`,
         );
       }
+    }
+  }
+
+  /**
+   * Single create: always inserts a new row (no school-year/level deduplication).
+   * Deduplication by school year + level applies only to {@link createMany} (`POST /classes/batch`).
+   */
+  async create(dto: CreateClassDto, companyId: number): Promise<ClassEntity> {
+    try {
+      await this.assertSchoolYearsAllowNewClasses([dto.school_year_id], companyId);
 
       // Always set company_id from authenticated user
       const dtoWithCompany = {
@@ -89,18 +111,201 @@ export class ClassService {
     }
   }
 
+  /** Used only by {@link createMany}. Same school year + level (+ company) => skip insert, return existing. */
+  private classLevelDuplicateKey(dto: CreateClassDto): string {
+    return `${dto.school_year_id}:${dto.level_id}`;
+  }
+
+  /** Bulk insert + single relational reload; result order matches `dtos`. */
+  private async bulkInsertClassesOrdered(
+    classRepo: Repository<ClassEntity>,
+    dtos: CreateClassDto[],
+    companyId: number,
+  ): Promise<ClassEntity[]> {
+    if (dtos.length === 0) {
+      return [];
+    }
+    const entities = dtos.map((dto) =>
+      classRepo.create({
+        title: dto.title ?? null,
+        description: dto.description,
+        program_id: dto.program_id,
+        specialization_id: dto.specialization_id,
+        level_id: dto.level_id,
+        school_year_id: dto.school_year_id,
+        company_id: companyId,
+        status: dto.status ?? BATCH_CREATE_DEFAULT_STATUS,
+      }),
+    );
+    const saved = await classRepo.save(entities);
+    const ids = saved.map((c) => c.id);
+    const loaded = await classRepo.find({
+      where: { id: In(ids), company_id: companyId },
+      relations: ['program', 'specialization', 'level', 'schoolYear'],
+    });
+    const byId = new Map(loaded.map((c) => [c.id, c]));
+    return ids.map((id) => {
+      const row = byId.get(id);
+      if (!row) {
+        throw new BadRequestException('Failed to load created classes after insert');
+      }
+      return row;
+    });
+  }
+
+  private handleClassBatchPersistenceError(
+    error: unknown,
+    companyId: number,
+    count: number,
+    logMessage: string,
+    userFallbackMessage: string,
+  ): never {
+    if (error instanceof BadRequestException) {
+      throw error;
+    }
+    this.logger.error(logMessage, {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      count,
+      companyId,
+    });
+    if (error instanceof QueryFailedError) {
+      const errorMessage = error.message;
+      if (errorMessage.includes('Duplicate entry')) {
+        const match = errorMessage.match(/Duplicate entry '(.+?)' for key/);
+        if (match) {
+          throw new BadRequestException(`Duplicate entry: ${match[1]} already exists`);
+        }
+        throw new BadRequestException('This record already exists');
+      }
+      if (errorMessage.includes('foreign key constraint')) {
+        throw new BadRequestException(
+          'Cannot create class: Invalid reference (program, specialization, level, or school year not found)',
+        );
+      }
+      if (errorMessage.includes('cannot be null')) {
+        throw new BadRequestException('Required field cannot be null');
+      }
+      if (process.env.NODE_ENV !== 'production') {
+        throw new BadRequestException(`Database error: ${errorMessage}`);
+      }
+    }
+    throw new BadRequestException(userFallbackMessage);
+  }
+
+  /**
+   * Creates many classes in one transaction: one school-year validation query, one bulk save,
+   * one relational reload — avoids N+1 round-trips for large batches.
+   * Skips creating a row when a non-deleted class already exists for the same school year and level
+   * (and company); duplicate rows in the same batch share one insert. Response order matches `items`.
+   * New inserts default `status` to **2** (pending) when omitted.
+   */
   async createMany(dtos: CreateClassDto[], companyId: number): Promise<ClassEntity[]> {
     if (!dtos || dtos.length === 0) {
       throw new BadRequestException('At least one class is required');
     }
 
-    const created: ClassEntity[] = [];
-    for (const dto of dtos) {
-      // Reuse existing single-create logic, including validations and error handling
-      const cls = await this.create(dto, companyId);
-      created.push(cls);
+    const schoolYearIds = dtos.map((d) => d.school_year_id);
+    await this.assertSchoolYearsAllowNewClasses(schoolYearIds, companyId);
+
+    try {
+      return await this.repo.manager.transaction(async (em) => {
+        const classRepo = em.getRepository(ClassEntity);
+        const uniqueSchoolYears = [...new Set(schoolYearIds)];
+
+        const existingRows = await classRepo.find({
+          where: {
+            company_id: companyId,
+            school_year_id: In(uniqueSchoolYears),
+            status: Not(-2),
+          },
+          relations: ['program', 'specialization', 'level', 'schoolYear'],
+          order: { id: 'ASC' },
+        });
+
+        const existingByLevelKey = new Map<string, ClassEntity>();
+        for (const row of existingRows) {
+          const key = `${row.school_year_id}:${row.level_id}`;
+          if (!existingByLevelKey.has(key)) {
+            existingByLevelKey.set(key, row);
+          }
+        }
+
+        const batchSeenNewKey = new Set<string>();
+        const dtosToInsert: CreateClassDto[] = [];
+        const insertKeyOrder: string[] = [];
+
+        for (const dto of dtos) {
+          const key = this.classLevelDuplicateKey(dto);
+          if (existingByLevelKey.has(key)) {
+            continue;
+          }
+          if (batchSeenNewKey.has(key)) {
+            continue;
+          }
+          batchSeenNewKey.add(key);
+          dtosToInsert.push(dto);
+          insertKeyOrder.push(key);
+        }
+
+        const newByKey = new Map<string, ClassEntity>();
+        if (dtosToInsert.length > 0) {
+          const insertedOrdered = await this.bulkInsertClassesOrdered(classRepo, dtosToInsert, companyId);
+          for (let i = 0; i < insertKeyOrder.length; i += 1) {
+            newByKey.set(insertKeyOrder[i], insertedOrdered[i]);
+          }
+        }
+
+        return dtos.map((dto) => {
+          const key = this.classLevelDuplicateKey(dto);
+          const fromExisting = existingByLevelKey.get(key);
+          if (fromExisting) {
+            return fromExisting;
+          }
+          const created = newByKey.get(key);
+          if (created) {
+            return created;
+          }
+          throw new BadRequestException('Failed to resolve class after batch create');
+        });
+      });
+    } catch (error) {
+      this.handleClassBatchPersistenceError(
+        error,
+        companyId,
+        dtos.length,
+        'Failed to create classes in batch',
+        'Failed to create classes in batch',
+      );
     }
-    return created;
+  }
+
+  /**
+   * Like {@link createMany} but **always inserts one row per item** (same school year + level allowed,
+   * including duplicates already in DB). No skip/reuse by year+level. Default `status` **2** (pending) when omitted.
+   */
+  async createManyAllowDuplicates(dtos: CreateClassDto[], companyId: number): Promise<ClassEntity[]> {
+    if (!dtos || dtos.length === 0) {
+      throw new BadRequestException('At least one class is required');
+    }
+
+    const schoolYearIds = dtos.map((d) => d.school_year_id);
+    await this.assertSchoolYearsAllowNewClasses(schoolYearIds, companyId);
+
+    try {
+      return await this.repo.manager.transaction(async (em) => {
+        const classRepo = em.getRepository(ClassEntity);
+        return this.bulkInsertClassesOrdered(classRepo, dtos, companyId);
+      });
+    } catch (error) {
+      this.handleClassBatchPersistenceError(
+        error,
+        companyId,
+        dtos.length,
+        'Failed to create classes in batch (allow duplicates)',
+        'Failed to create classes in batch (allow duplicates)',
+      );
+    }
   }
 
   async findAll(query: ClassQueryDto, companyId: number): Promise<PaginatedResponseDto<ClassEntity>> {

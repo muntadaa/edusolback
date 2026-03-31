@@ -9,6 +9,7 @@ import { SyncManyPreinscriptionsDto } from './dto/sync-many-preinscriptions.dto'
 import { AdminDecisionDto } from './dto/admin-decision.dto';
 import { CommercialEvaluationDto } from './dto/commercial-evaluation.dto';
 import { AssignCommercialBulkDto } from './dto/assign-commercial-bulk.dto';
+import { CreateCommercialPreinscriptionDto } from './dto/create-commercial-preinscription.dto';
 import { CreatePreinscriptionMeetingDto } from './dto/create-preinscription-meeting.dto';
 import { UpdatePreinscriptionMeetingDto } from './dto/update-preinscription-meeting.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -55,6 +56,34 @@ export class PreinscriptionsController {
       publicToken,
       createPreinscriptionDto,
     );
+  }
+
+  /**
+   * Commercial Excel import: one dossier per request. Same validation as public create for shared fields.
+   * Stored as **NEW** with **commercial_id** null (first step); assign a commercial via assign-commercial when ready.
+   */
+  @Post('commercial')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 201,
+    description:
+      'Pre-inscription created in NEW state (not assigned to a commercial). Requires page access to /preinscriptions/commercial.',
+  })
+  @ApiResponse({ status: 403, description: 'User is not allowed to use the commercial pre-inscriptions flow.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Duplicate email for this company (message contains "already exists" for client heuristics).',
+  })
+  createCommercial(@Request() req, @Body() dto: CreateCommercialPreinscriptionDto) {
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    if (!userId) {
+      throw new BadRequestException('User id is required');
+    }
+    return this.preinscriptionsService.createByCommercial(userId, companyId, dto);
   }
 
   /**

@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { StudentsQueryDto, StudentsWithoutReportQueryDto } from './dto/students-query.dto';
+import { UnassignedForClassAssignmentQueryDto } from './dto/unassigned-for-class-assignment-query.dto';
 import { Student } from './entities/student.entity';
 import { User } from '../users/entities/user.entity';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
@@ -351,6 +352,80 @@ export class StudentsService {
     if (query.status !== undefined) qb.andWhere('s.status = :status', { status: query.status });
 
     qb.skip((page - 1) * limit).take(limit).orderBy('s.id', 'DESC');
+
+    const [data, total] = await qb.getManyAndCount();
+    return PaginationService.createResponse(data, page, limit, total);
+  }
+
+  /**
+   * Students eligible to be assigned to a class: company roster, not deleted, not already on this class,
+   * not in another class for the same school year, and not holding a null-class reservation for another
+   * school year or level than the target class.
+   */
+  async findUnassignedForClassAssignment(
+    query: UnassignedForClassAssignmentQueryDto,
+    companyId: number,
+  ): Promise<PaginatedResponseDto<Student>> {
+    const classEntity = await this.classRepository.findOne({
+      where: { id: query.class_id, company_id: companyId, status: Not(-2) },
+    });
+    if (!classEntity) {
+      throw new NotFoundException('Class not found');
+    }
+
+    const schoolYearId = classEntity.school_year_id;
+    const levelId = classEntity.level_id;
+    const classId = query.class_id;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const del = -2;
+
+    const qb = this.studentRepository.createQueryBuilder('s').leftJoinAndSelect('s.company', 'company');
+
+    qb.andWhere('s.company_id = :companyId', { companyId });
+    qb.andWhere('s.status <> :del', { del });
+
+    qb.andWhere(
+      `NOT EXISTS (
+        SELECT 1 FROM class_students cs
+        WHERE cs.student_id = s.id AND cs.company_id = :companyId AND cs.statut <> :del
+        AND cs.class_id = :classId
+      )`,
+      { companyId, del, classId },
+    );
+
+    qb.andWhere(
+      `NOT EXISTS (
+        SELECT 1 FROM class_students cs
+        INNER JOIN classes c ON c.id = cs.class_id AND c.statut <> :del
+        WHERE cs.student_id = s.id AND cs.company_id = :companyId AND cs.statut <> :del
+        AND c.school_year_id = :schoolYearId
+        AND cs.class_id <> :classId
+      )`,
+      { companyId, del, schoolYearId, classId },
+    );
+
+    qb.andWhere(
+      `NOT EXISTS (
+        SELECT 1 FROM class_students cs
+        WHERE cs.student_id = s.id AND cs.company_id = :companyId AND cs.statut <> :del
+        AND cs.class_id IS NULL
+        AND (
+          (cs.school_year_id IS NOT NULL AND cs.school_year_id <> :schoolYearId)
+          OR (cs.level_id IS NOT NULL AND cs.level_id <> :levelId)
+        )
+      )`,
+      { companyId, del, schoolYearId, levelId },
+    );
+
+    if (query.search) {
+      qb.andWhere(
+        '(s.first_name LIKE :search OR s.last_name LIKE :search OR s.email LIKE :search)',
+        { search: `%${query.search}%` },
+      );
+    }
+
+    qb.orderBy('s.id', 'DESC').skip((page - 1) * limit).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
     return PaginationService.createResponse(data, page, limit, total);

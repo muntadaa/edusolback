@@ -4,6 +4,7 @@ import { StudentsService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { StudentsQueryDto, StudentsWithoutReportQueryDto } from './dto/students-query.dto';
+import { UnassignedForClassAssignmentQueryDto } from './dto/unassigned-for-class-assignment-query.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
@@ -99,6 +100,22 @@ export class StudentsController {
       throw new BadRequestException('User must belong to a company');
     }
     return this.studentsService.findAllWithoutReport(query, companyId);
+  }
+
+  @Get('unassigned-for-class-assignment')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 200,
+    description:
+      'Paginated students still assignable to the given class (same shape as GET /students). meta.total counts this filtered set only.',
+  })
+  @ApiResponse({ status: 404, description: 'Class not found for this company.' })
+  findUnassignedForClassAssignment(@Request() req, @Query() query: UnassignedForClassAssignmentQueryDto) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.studentsService.findUnassignedForClassAssignment(query, companyId);
   }
 
   @Get(':id/with-class')
