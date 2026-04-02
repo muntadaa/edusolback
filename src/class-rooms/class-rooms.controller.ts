@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
-import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ClassRoomsService } from './class-rooms.service';
 import { CreateClassRoomDto } from './dto/create-class-room.dto';
 import { UpdateClassRoomDto } from './dto/update-class-room.dto';
@@ -25,6 +25,13 @@ export class ClassRoomsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
+  @ApiQuery({ name: 'classroom_type_id', required: false, type: Number, description: 'Filter by classroom type id' })
+  @ApiQuery({
+    name: 'untyped_only',
+    required: false,
+    type: Boolean,
+    description: 'If true, only rooms without a type (mutually exclusive with classroom_type_id in practice)',
+  })
   @ApiResponse({ status: 200, description: 'Retrieve class rooms with pagination metadata.' })
   findAll(@Request() req, @Query() query: ClassRoomQueryDto) {
     const companyId = req.user.company_id;

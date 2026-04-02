@@ -13,6 +13,7 @@ import { Program } from '../programs/entities/program.entity';
 import { Specialization } from '../specializations/entities/specialization.entity';
 import { Level } from '../level/entities/level.entity';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
+import { AuditorDocumentsSyncService } from '../auditor/auditor-documents-sync.service';
 
 @Injectable()
 export class ClassStudentService {
@@ -30,6 +31,7 @@ export class ClassStudentService {
     @InjectRepository(SchoolYear)
     private readonly schoolYearRepo: Repository<SchoolYear>,
     private readonly studentAccountingService: StudentAccountingService,
+    private readonly auditorDocumentsSyncService: AuditorDocumentsSyncService,
   ) {}
 
   /**
@@ -151,6 +153,14 @@ export class ClassStudentService {
 
     try {
       const saved = await this.repo.save(entity);
+      await this.auditorDocumentsSyncService.syncForStudent(
+        saved.student_id,
+        companyId,
+        saved.program_id,
+        saved.specialization_id,
+        saved.level_id,
+        saved.id,
+      );
       // Do NOT generate payment details here. Details are generated only when the student
       // is activated (status = 1) via PATCH /api/students/:id or set-password flow.
       return this.findOne(saved.id, companyId);
@@ -305,6 +315,14 @@ export class ClassStudentService {
 
     await this.repo.save(merged);
     await this.studentAccountingService.syncFromClassStudent(id, companyId);
+    await this.auditorDocumentsSyncService.syncForStudent(
+      merged.student_id,
+      companyId,
+      merged.program_id,
+      merged.specialization_id,
+      merged.level_id,
+      merged.id,
+    );
 
     return this.findOne(id, companyId);
   }

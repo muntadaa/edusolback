@@ -34,6 +34,14 @@ async function fixAdminRolePages() {
       '/settings/colors',
       '/settings/company',
       '/settings/user',
+      '/settings/types',
+      '/settings/types/link',
+      '/settings/types/classroom',
+      '/settings/types/planning',
+      '/settings/types/class-rooms',
+      '/settings/pdf-layout',
+      '/settings/events',
+      '/settings/required-documents',
     ];
 
     // Find all admin roles (system roles and company-specific)

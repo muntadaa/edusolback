@@ -30,6 +30,12 @@ export class Event {
   @Column({ type: 'date', name: 'end_date' })
   end_date: string;
 
+  /**
+   * Inclusive calendar-day span between start_date and end_date (same calendar day → 1). Set by the API only.
+   */
+  @Column({ type: 'int', name: 'duree', default: 1 })
+  duree: number;
+
   @Column({
     type: 'enum',
     enum: EventType,

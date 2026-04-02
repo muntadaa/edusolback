@@ -106,6 +106,11 @@ export class StudentsService {
           company_id: companyId,
           status: createStudentDto.status ?? 2, // Default to pending (2) if not specified
         });
+        await this.assertMatriculeEcoleAvailable(
+          companyId,
+          deletedStudent.matricule_ecole,
+          deletedStudent.id,
+        );
         saved = await this.studentRepository.save(deletedStudent);
       } else {
         // Create new student
@@ -114,6 +119,7 @@ export class StudentsService {
           company_id: companyId,
           status: createStudentDto.status ?? 2, // Default to pending (2) if not specified
         };
+        await this.assertMatriculeEcoleAvailable(companyId, dtoWithCompany.matricule_ecole, undefined);
         const created = this.studentRepository.create(dtoWithCompany);
         saved = await this.studentRepository.save(created);
       }
@@ -685,6 +691,29 @@ export class StudentsService {
     };
   }
 
+  private async assertMatriculeEcoleAvailable(
+    companyId: number,
+    matricule: string | undefined | null,
+    excludeStudentId?: number,
+  ): Promise<void> {
+    const m = matricule?.trim();
+    if (!m) {
+      return;
+    }
+    const qb = this.studentRepository
+      .createQueryBuilder('s')
+      .where('s.company_id = :companyId', { companyId })
+      .andWhere('s.matricule_ecole = :m', { m })
+      .andWhere('s.status != :del', { del: -2 });
+    if (excludeStudentId != null) {
+      qb.andWhere('s.id != :id', { id: excludeStudentId });
+    }
+    const conflict = await qb.getOne();
+    if (conflict) {
+      throw new BadRequestException(`School matricule ${m} is already in use`);
+    }
+  }
+
   async update(id: number, updateStudentDto: UpdateStudentDto, companyId: number): Promise<Student> {
     const existing = await this.findOne(id, companyId);
 
@@ -693,6 +722,10 @@ export class StudentsService {
     delete (dtoWithoutCompany as any).company_id;
     // Remove class_room_id if present (no longer supported)
     delete (dtoWithoutCompany as any).class_room_id;
+
+    if (dtoWithoutCompany.matricule_ecole !== undefined) {
+      await this.assertMatriculeEcoleAvailable(companyId, dtoWithoutCompany.matricule_ecole, id);
+    }
 
     const emailChanged =
       dtoWithoutCompany.email !== undefined &&

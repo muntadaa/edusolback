@@ -20,8 +20,8 @@ export class ClassRoom {
   @JoinColumn({ name: 'classroom_type_id' })
   classroomType: ClassroomType | null;
 
-  @Column({ type: 'int' })
-  capacity: number;
+  @Column({ type: 'int', nullable: true })
+  capacity: number | null;
 
   @Column()
   company_id: number;

@@ -22,10 +22,16 @@ export class CreateClassRoomDto {
   @IsNumber()
   classroom_type_id?: number;
 
-  @ApiProperty({ description: 'Maximum number of students allowed', example: 30, minimum: 0 })
+  @ApiPropertyOptional({
+    description: 'Maximum number of students allowed; omit if unknown',
+    example: 30,
+    minimum: 0,
+  })
+  @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
-  capacity: number;
+  capacity?: number;
 
   @ApiPropertyOptional({ description: 'Owning company identifier (automatically set from authenticated user)', example: 4 })
   @IsOptional()

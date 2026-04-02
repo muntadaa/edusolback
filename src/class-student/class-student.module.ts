@@ -9,6 +9,7 @@ import { Program } from '../programs/entities/program.entity';
 import { Specialization } from '../specializations/entities/specialization.entity';
 import { Level } from '../level/entities/level.entity';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
+import { AuditorModule } from '../auditor/auditor.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SchoolYear } from '../school-years/entities/school-year.entity';
       SchoolYear,
     ]),
     StudentAccountingModule,
+    AuditorModule,
   ],
   controllers: [ClassStudentController],
   providers: [ClassStudentService],

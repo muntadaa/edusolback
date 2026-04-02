@@ -10,6 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository, QueryFailedError } from 'typeorm';
 import { CreatePreinscriptionDto } from './dto/create-preinscription.dto';
 import { CreateCommercialPreinscriptionDto } from './dto/create-commercial-preinscription.dto';
+import { CreateCommercialPreinscriptionWithLevelDto } from './dto/create-commercial-preinscription-with-level.dto';
 import { UpdatePreinscriptionDto } from './dto/update-preinscription.dto';
 import { PreInscription } from './entities/preinscription.entity';
 import { Company } from '../company/entities/company.entity';
@@ -18,7 +19,6 @@ import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
 import { PreInscriptionStatus } from './enums/preinscription-status.enum';
 import { Level } from '../level/entities/level.entity';
-import { PreInscriptionDiploma } from '../pre-inscription-diploma/entities/pre-inscription-diploma.entity';
 import { PreInscriptionConversionService } from './preinscription-conversion.service';
 import { canTransition } from './workflow/preinscription.workflow';
 import { User } from '../users/entities/user.entity';
@@ -48,8 +48,6 @@ export class PreinscriptionsService {
     private readonly levelRepo: Repository<Level>,
     @InjectRepository(SchoolYear)
     private readonly schoolYearRepo: Repository<SchoolYear>,
-    @InjectRepository(PreInscriptionDiploma)
-    private readonly diplomaRepo: Repository<PreInscriptionDiploma>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
     @InjectRepository(UserRole)
@@ -176,6 +174,97 @@ export class PreinscriptionsService {
   }
 
   /**
+   * Commercial Excel import with optional level: same as {@link createByCommercial}, plus when `level_id`
+   * is valid for the company, sets proposed_program_id / proposed_specialization_id / proposed_level_id
+   * from the level and its specialization. If `level_id` is invalid, the pre-inscription is still saved
+   * (no proposed_*); the response includes `level_validation_error` so the client can show a warning.
+   */
+  async createByCommercialWithOptionalLevel(
+    actorUserId: number,
+    companyId: number,
+    dto: CreateCommercialPreinscriptionWithLevelDto,
+  ): Promise<{ preinscription: PreInscription; level_validation_error: string | null }> {
+    const allowed = await this.userHasAccessToRoute(actorUserId, companyId, '/preinscriptions/commercial');
+    if (!allowed) {
+      throw new ForbiddenException('You do not have access to create commercial pre-registrations');
+    }
+
+    this.validateBirthDateNotFuture(dto.birth_date as any);
+
+    const emailNorm = dto.email.trim().toLowerCase();
+    const existing = await this.repo
+      .createQueryBuilder('pre')
+      .where('pre.company_id = :companyId', { companyId })
+      .andWhere('LOWER(TRIM(pre.email)) = :email', { email: emailNorm })
+      .getOne();
+    if (existing) {
+      throw new ConflictException('A pre-registration with this email already exists');
+    }
+
+    let proposed_program_id: number | null = null;
+    let proposed_specialization_id: number | null = null;
+    let proposed_level_id: number | null = null;
+    let level_validation_error: string | null = null;
+
+    if (dto.level_id != null) {
+      const level = await this.levelRepo.findOne({
+        where: { id: dto.level_id, company_id: companyId, status: Not(-2) },
+        relations: { specialization: true },
+      });
+      if (!level) {
+        level_validation_error =
+          'Level not found, removed, or does not belong to your company. Pre-registration was saved without proposed program, specialization, or level.';
+      } else if (!level.specialization) {
+        level_validation_error =
+          'Level has no specialization. Pre-registration was saved without proposed program, specialization, or level.';
+      } else if (
+        level.specialization.company_id !== companyId ||
+        level.specialization.status === -2
+      ) {
+        level_validation_error =
+          'Specialization is invalid or inactive for your company. Pre-registration was saved without proposed program, specialization, or level.';
+      } else {
+        proposed_program_id = level.specialization.program_id;
+        proposed_specialization_id = level.specialization_id;
+        proposed_level_id = level.id;
+      }
+    }
+
+    const entity = this.repo.create({
+      first_name: dto.first_name,
+      last_name: dto.last_name,
+      email: emailNorm,
+      whatsapp_phone: dto.whatsapp_phone,
+      nationality: dto.nationality,
+      city: dto.city,
+      address: dto.address ?? null,
+      birth_date: dto.birth_date ? (dto.birth_date as any) : null,
+      current_formation: (dto.current_formation ?? '').trim(),
+      desired_formation: (dto.desired_formation ?? '').trim(),
+      how_known: dto.how_known ?? null,
+      company_id: companyId,
+      commercial_id: null,
+      status: PreInscriptionStatus.NEW,
+      proposed_program_id,
+      proposed_specialization_id,
+      proposed_level_id,
+    });
+
+    try {
+      const preinscription = await this.repo.save(entity);
+      return { preinscription, level_validation_error };
+    } catch (err) {
+      if (err instanceof QueryFailedError) {
+        const msg = err.message ?? '';
+        if (msg.includes('Duplicate') || msg.includes('duplicate') || msg.includes('UNIQUE')) {
+          throw new ConflictException('A pre-registration with this email already exists');
+        }
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Find a pre-inscription by company publicToken and student email.
    * Used to pre-fill/synchronize data when the student starts registration.
    */
@@ -241,6 +330,10 @@ export class PreinscriptionsService {
       qb.andWhere('pre.commercial_id = :commercialId', {
         commercialId: query.commercial_id,
       });
+    }
+
+    if (query.status !== undefined && query.status !== null) {
+      qb.andWhere('pre.status = :status', { status: query.status });
     }
 
     qb.skip((page - 1) * limit).take(limit);
@@ -733,20 +826,6 @@ export class PreinscriptionsService {
       throw new BadRequestException(`proposed_school_year_id ${proposedSchoolYearId} is invalid`);
     }
 
-    const diplomaCount = await this.diplomaRepo.count({
-      where: { preinscription_id: preinscription.id },
-    });
-    if (diplomaCount < 1) {
-      throw new BadRequestException('At least one diploma is required before submitting to administration');
-    }
-
-    const meetingCount = await this.meetingRepo.count({
-      where: { preinscription_id: preinscription.id },
-    });
-    if (meetingCount < 1) {
-      throw new BadRequestException('At least one meeting is required before submitting to administration');
-    }
-
     preinscription.status = PreInscriptionStatus.SENT_TO_ADMIN;
     return this.repo.save(preinscription);
   }
@@ -825,8 +904,64 @@ export class PreinscriptionsService {
   }
 
   /**
-   * Synchronize a pre-inscription into the students/users tables.
-   * Behaves like creating a new student: uses StudentsService.create under the hood.
+   * Apply the same admin decision to many pre-inscriptions (company-scoped).
+   * On approve, runs conversion per id like {@link adminDecision}. Per-id failures do not roll back others.
+   */
+  async adminDecisionBulk(
+    companyId: number,
+    dto: {
+      ids: number[];
+      approved: boolean;
+      final_program_id?: number;
+      final_specialization_id?: number;
+      final_level_id?: number;
+      final_school_year_id?: number;
+      admin_comment?: string;
+    },
+  ): Promise<
+    Array<{
+      id: number;
+      status: 'ok' | 'error';
+      message?: string;
+      preinscription?: PreInscription;
+    }>
+  > {
+    const decision = {
+      approved: dto.approved,
+      final_program_id: dto.final_program_id,
+      final_specialization_id: dto.final_specialization_id,
+      final_level_id: dto.final_level_id,
+      final_school_year_id: dto.final_school_year_id,
+      admin_comment: dto.admin_comment,
+    };
+
+    const results: Array<{
+      id: number;
+      status: 'ok' | 'error';
+      message?: string;
+      preinscription?: PreInscription;
+    }> = [];
+
+    for (const id of dto.ids) {
+      try {
+        await this.findOneByCompany(id, companyId);
+        const preinscription = await this.adminDecision(id, decision);
+        results.push({ id, status: 'ok', preinscription });
+      } catch (error: any) {
+        results.push({
+          id,
+          status: 'error',
+          message: error?.message ?? 'Unknown error',
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Synchronize a pre-inscription into the students/users tables (conversion pipeline).
+   * Assigns school matricule (matricule_ecole) automatically when the student is created.
    * Throws if student/user with this email already exists for the company.
    */
   async syncToStudent(preinscriptionId: number, companyIdFromUser: number) {

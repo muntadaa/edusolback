@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -12,8 +12,35 @@ export class EventsService {
     private readonly repo: Repository<Event>,
   ) {}
 
+  /** YYYY-MM-DD at local midnight (no UTC shift). */
+  private parseYmd(ymd: string): Date {
+    const parts = ymd.split('-').map((p) => parseInt(p, 10));
+    if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) {
+      throw new BadRequestException('Invalid date format; use YYYY-MM-DD');
+    }
+    const [y, m, d] = parts;
+    return new Date(y, m - 1, d);
+  }
+
+  /**
+   * Inclusive calendar days from start_date through end_date. Same day → 1. Minimum 1.
+   */
+  computeDuree(startDate: string, endDate: string): number {
+    const start = this.parseYmd(startDate);
+    const end = this.parseYmd(endDate);
+    if (end < start) {
+      throw new BadRequestException('end_date must be on or after start_date');
+    }
+    const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000);
+    return Math.max(1, diffDays + 1);
+  }
+
   async create(createEventDto: CreateEventDto): Promise<Event> {
-    const entity = this.repo.create(createEventDto);
+    const duree =
+      createEventDto.duree !== undefined
+        ? createEventDto.duree
+        : this.computeDuree(createEventDto.start_date, createEventDto.end_date);
+    const entity = this.repo.create({ ...createEventDto, duree });
     return this.repo.save(entity);
   }
 
@@ -54,6 +81,10 @@ export class EventsService {
   async update(id: number, updateEventDto: UpdateEventDto): Promise<Event> {
     const existing = await this.findOne(id);
     const merged = this.repo.merge(existing, updateEventDto);
+    merged.duree =
+      updateEventDto.duree !== undefined
+        ? updateEventDto.duree
+        : this.computeDuree(merged.start_date, merged.end_date);
     return this.repo.save(merged);
   }
 

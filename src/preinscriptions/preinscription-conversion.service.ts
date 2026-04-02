@@ -11,9 +11,11 @@ import { Level } from '../level/entities/level.entity';
 import { SchoolYear } from '../school-years/entities/school-year.entity';
 import { ClassStudent } from '../class-student/entities/class-student.entity';
 import { canTransition } from './workflow/preinscription.workflow';
+import { allocateNextMatriculeEcole, schoolYearStartCalendarYear } from '../students/school-matricule.util';
 import { User } from '../users/entities/user.entity';
 import { Role } from '../roles/entities/role.entity';
 import { UserRole } from '../user-roles/entities/user-role.entity';
+import { AuditorDocumentsSyncService } from '../auditor/auditor-documents-sync.service';
 
 @Injectable()
 export class PreInscriptionConversionService {
@@ -21,10 +23,11 @@ export class PreInscriptionConversionService {
     private readonly dataSource: DataSource,
     @InjectRepository(PreInscription)
     private readonly preinscriptionRepo: Repository<PreInscription>,
+    private readonly auditorDocumentsSyncService: AuditorDocumentsSyncService,
   ) {}
 
   async convertToStudent(preInscriptionId: number): Promise<Student> {
-    return this.dataSource.transaction(async (manager) => {
+    const { student, auditorSync } = await this.dataSource.transaction(async (manager) => {
       const preinscription = await manager.findOne(PreInscription, {
         where: { id: preInscriptionId },
         relations: ['diplomas'],
@@ -58,6 +61,28 @@ export class PreInscriptionConversionService {
         );
       }
 
+      let joinYear = preinscription.decision_at
+        ? new Date(preinscription.decision_at).getFullYear()
+        : new Date().getFullYear();
+      if (preinscription.final_school_year_id) {
+        const sy = await manager.findOne(SchoolYear, {
+          where: {
+            id: preinscription.final_school_year_id,
+            company_id: preinscription.company_id,
+            status: Not(-2),
+          },
+        });
+        if (sy?.start_date) {
+          joinYear = schoolYearStartCalendarYear(sy.start_date as Date | string);
+        }
+      }
+
+      const matricule_ecole = await allocateNextMatriculeEcole(
+        manager,
+        preinscription.company_id,
+        joinYear,
+      );
+
       // Keep compatibility with existing sync: create the student from pre-inscription personal data.
       const student = manager.create(Student, {
         first_name: preinscription.first_name,
@@ -69,6 +94,8 @@ export class PreInscriptionConversionService {
         picture: (preinscription as any).picture ?? null,
         company_id: preinscription.company_id,
         status: 2,
+        matricule_ecole,
+        matricule_etat: null,
       });
       const savedStudent = await manager.save(Student, student);
 
@@ -94,6 +121,15 @@ export class PreInscriptionConversionService {
       }
 
       // Create a class_students row for the new student (no class yet: class_id stays null).
+      let auditorSync: {
+        studentId: number;
+        companyId: number;
+        programId: number;
+        specializationId: number;
+        levelId: number;
+        classStudentId: number;
+      } | null = null;
+
       if (
         preinscription.final_program_id &&
         preinscription.final_specialization_id &&
@@ -109,6 +145,7 @@ export class PreInscriptionConversionService {
           } as any,
         });
 
+        let classStudentId: number;
         if (!existingAssignment) {
           const assignment = manager.create(ClassStudent, {
             student_id: savedStudent.id,
@@ -121,8 +158,20 @@ export class PreInscriptionConversionService {
             status: 1,
             tri: 1,
           });
-          await manager.save(ClassStudent, assignment);
+          const savedAssignment = await manager.save(ClassStudent, assignment);
+          classStudentId = savedAssignment.id;
+        } else {
+          classStudentId = existingAssignment.id;
         }
+
+        auditorSync = {
+          studentId: savedStudent.id,
+          companyId: preinscription.company_id,
+          programId: preinscription.final_program_id,
+          specializationId: preinscription.final_specialization_id,
+          levelId: preinscription.final_level_id,
+          classStudentId,
+        };
       }
 
       // Generate student payment details from level pricing based on final_level_id.
@@ -150,8 +199,21 @@ export class PreInscriptionConversionService {
       preinscription.status = PreInscriptionStatus.CONVERTED;
       await manager.save(PreInscription, preinscription);
 
-      return savedStudent;
+      return { student: savedStudent, auditorSync };
     });
+
+    if (auditorSync) {
+      await this.auditorDocumentsSyncService.syncForStudent(
+        auditorSync.studentId,
+        auditorSync.companyId,
+        auditorSync.programId,
+        auditorSync.specializationId,
+        auditorSync.levelId,
+        auditorSync.classStudentId,
+      );
+    }
+
+    return student;
   }
 
   private async resolveTargetSchoolYear(

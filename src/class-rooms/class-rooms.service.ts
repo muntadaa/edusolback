@@ -47,10 +47,15 @@ export class ClassRoomsService {
     }
 
     try {
+      const capacity =
+        createClassRoomDto.capacity === undefined || createClassRoomDto.capacity === null
+          ? null
+          : createClassRoomDto.capacity;
       // Always set company_id from authenticated user
       const dtoWithCompany = {
         ...createClassRoomDto,
         company_id: companyId,
+        capacity,
       };
       const created = this.classRoomRepository.create(dtoWithCompany);
       return await this.classRoomRepository.save(created);
@@ -64,6 +69,14 @@ export class ClassRoomsService {
   }
 
   async findAll(query: ClassRoomQueryDto, companyId: number): Promise<PaginatedResponseDto<ClassRoom>> {
+    if (
+      query.untyped_only === true &&
+      query.classroom_type_id !== undefined &&
+      query.classroom_type_id !== null
+    ) {
+      throw new BadRequestException('Use either classroom_type_id or untyped_only, not both');
+    }
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const qb = this.classRoomRepository.createQueryBuilder('cr')
@@ -79,7 +92,9 @@ export class ClassRoomsService {
       });
     }
 
-    if (query.classroom_type_id) {
+    if (query.untyped_only === true) {
+      qb.andWhere('cr.classroom_type_id IS NULL');
+    } else if (query.classroom_type_id !== undefined && query.classroom_type_id !== null) {
       qb.andWhere('cr.classroom_type_id = :classroom_type_id', { classroom_type_id: query.classroom_type_id });
     }
 

@@ -418,7 +418,7 @@ export class AuthService {
 
   /**
    * Restricts the admin role to only have access to specific pages for a specific company
-   * Default admin pages: /settings, /settings/access, /settings/roles, /settings/colors, /users
+   * Default admin pages: core /settings/* including /settings/types/* (link, classroom, planning, class-rooms), events, etc.
    * This is called when creating the first admin user for a company
    * If pages don't exist, they will be created automatically
    * @param adminRoleId The ID of the admin role
@@ -434,8 +434,14 @@ export class AuthService {
         { route: '/settings/colors', title: 'Color Settings' },
         { route: '/settings/company', title: 'Company Settings' },
         { route: '/settings/user', title: 'User Settings' },
+        { route: '/settings/types', title: 'Types Settings' },
+        { route: '/settings/types/link', title: 'Link Types' },
+        { route: '/settings/types/classroom', title: 'Classroom Types' },
+        { route: '/settings/types/planning', title: 'Planning Session Types' },
+        { route: '/settings/types/class-rooms', title: 'Class Rooms' },
         { route: '/settings/pdf-layout', title: 'Settings - PDF Layout' },
         { route: '/settings/events', title: 'Events' },
+        { route: '/settings/required-documents', title: 'Settings - Required Documents' },
       ];
 
       // Find all required pages (global pages)

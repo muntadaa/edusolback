@@ -52,6 +52,8 @@ import { StudentPaymentAllocationsModule } from './student_payment_allocations/s
 import { StudentAccountingModule } from './student-accounting/student-accounting.module';
 import { PreInscriptionDiplomaModule } from './pre-inscription-diploma/pre-inscription-diploma.module';
 import { StudentPresenceValidationModule } from './student_presence_validation/student_presence_validation.module';
+import { RequiredDocsModule } from './required-docs/required-docs.module';
+import { AuditorModule } from './auditor/auditor.module';
 
 @Module({
   imports: [
@@ -71,7 +73,9 @@ import { StudentPresenceValidationModule } from './student_presence_validation/s
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'edusol_25',
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
-      synchronize: process.env.NODE_ENV !== 'production', 
+      // Merge entities from every TypeOrmModule.forFeature() (fixes missing Page metadata on Windows/dist).
+      autoLoadEntities: true,
+      synchronize: process.env.NODE_ENV !== 'production',
     }),
     AuthModule,
     CompanyModule,
@@ -116,6 +120,8 @@ import { StudentPresenceValidationModule } from './student_presence_validation/s
     StudentAccountingModule,
     PreInscriptionDiplomaModule,
     StudentPresenceValidationModule,
+    RequiredDocsModule,
+    AuditorModule,
   ],
   controllers: [AppController],
   providers: [

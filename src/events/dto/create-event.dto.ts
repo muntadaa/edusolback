@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { EventType } from '../entities/event.entity';
 
 export class CreateEventDto {
@@ -18,9 +18,19 @@ export class CreateEventDto {
   @IsDateString()
   start_date: string;
 
-  @ApiProperty({ description: 'End date (YYYY-MM-DD)', example: '2026-03-20' })
+  @ApiProperty({ description: 'End date (YYYY-MM-DD), inclusive last day of the event', example: '2026-03-20' })
   @IsDateString()
   end_date: string;
+
+  @ApiPropertyOptional({
+    description: 'Duration in days (min 1). If omitted, computed from start_date and end_date.',
+    minimum: 1,
+    example: 3,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  duree?: number;
 
   @ApiProperty({
     description: 'Event type',

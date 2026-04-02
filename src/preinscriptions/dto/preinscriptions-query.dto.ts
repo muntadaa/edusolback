@@ -1,6 +1,8 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationDto } from '../../common/dto/pagination.dto';
-import { IsOptional, IsString, IsNumber } from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PreInscriptionStatus } from '../enums/preinscription-status.enum';
 
 export class PreinscriptionsQueryDto extends PaginationDto {
   @IsOptional()
@@ -23,5 +25,13 @@ export class PreinscriptionsQueryDto extends PaginationDto {
   @Type(() => Number)
   @IsNumber()
   commercial_id?: number;
+
+  @ApiPropertyOptional({
+    enum: PreInscriptionStatus,
+    description: 'Filter by workflow status (e.g. SENT_TO_ADMIN for admin inbox)',
+  })
+  @IsOptional()
+  @IsEnum(PreInscriptionStatus)
+  status?: PreInscriptionStatus;
 }
 

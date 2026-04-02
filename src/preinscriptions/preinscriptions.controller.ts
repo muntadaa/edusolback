@@ -5,11 +5,14 @@ import { CreatePreinscriptionDto } from './dto/create-preinscription.dto';
 import { UpdatePreinscriptionDto } from './dto/update-preinscription.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PreinscriptionsQueryDto } from './dto/preinscriptions-query.dto';
+import { PreInscriptionStatus } from './enums/preinscription-status.enum';
 import { SyncManyPreinscriptionsDto } from './dto/sync-many-preinscriptions.dto';
 import { AdminDecisionDto } from './dto/admin-decision.dto';
+import { AdminDecisionBulkDto } from './dto/admin-decision-bulk.dto';
 import { CommercialEvaluationDto } from './dto/commercial-evaluation.dto';
 import { AssignCommercialBulkDto } from './dto/assign-commercial-bulk.dto';
 import { CreateCommercialPreinscriptionDto } from './dto/create-commercial-preinscription.dto';
+import { CreateCommercialPreinscriptionWithLevelDto } from './dto/create-commercial-preinscription-with-level.dto';
 import { CreatePreinscriptionMeetingDto } from './dto/create-preinscription-meeting.dto';
 import { UpdatePreinscriptionMeetingDto } from './dto/update-preinscription-meeting.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -87,6 +90,34 @@ export class PreinscriptionsController {
   }
 
   /**
+   * Commercial Excel import with optional level_id: same as POST /commercial, plus proposed_* when level is valid.
+   * Invalid level_id → **201** with `level_validation_error` set; pre-inscription still created (NEW, no commercial).
+   */
+  @Post('commercial/with-level')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 201,
+    description:
+      'Body: same as /commercial plus optional level_id. Returns { preinscription, level_validation_error }. Error string is null when level ok or omitted.',
+  })
+  @ApiResponse({ status: 403, description: 'User is not allowed to use the commercial pre-inscriptions flow.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Duplicate email for this company.',
+  })
+  createCommercialWithLevel(@Request() req, @Body() dto: CreateCommercialPreinscriptionWithLevelDto) {
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    if (!userId) {
+      throw new BadRequestException('User id is required');
+    }
+    return this.preinscriptionsService.createByCommercialWithOptionalLevel(userId, companyId, dto);
+  }
+
+  /**
    * Public endpoint: fetch an existing pre-inscription by company publicToken and student email.
    * Frontend can use this to pre-fill the registration form and then create the student/user
    * if they do not already exist.
@@ -114,6 +145,12 @@ export class PreinscriptionsController {
 
   @Get()
   @UseGuards(JwtAuthGuard)
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: PreInscriptionStatus,
+    description: 'Optional workflow filter (e.g. SENT_TO_ADMIN)',
+  })
   @ApiResponse({ status: 200, description: 'List all pre-inscriptions.' })
   findAll(@Request() req, @Query() query: PreinscriptionsQueryDto) {
     const companyId = req.user?.company_id;
@@ -188,6 +225,26 @@ export class PreinscriptionsController {
       dto.preinscriptionIds,
       companyId,
     );
+  }
+
+  /**
+   * Admin: approve or reject many pre-inscriptions in one request.
+   * Same body fields as single admin-decision (shared final_* when approving), plus `ids`.
+   * Returns per-id ok/error; one failure does not stop the rest.
+   */
+  @Patch('admin-decision/bulk')
+  @UseGuards(JwtAuthGuard)
+  @ApiResponse({
+    status: 200,
+    description:
+      'Per pre-inscription: status ok with preinscription payload, or error with message (wrong company, bad transition, duplicate student email, etc.).',
+  })
+  adminDecisionBulk(@Request() req, @Body() dto: AdminDecisionBulkDto) {
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.preinscriptionsService.adminDecisionBulk(companyId, dto);
   }
 
   @Get(':id/meetings')
@@ -408,8 +465,8 @@ export class PreinscriptionsController {
   }
 
   /**
-   * Sync a pre-inscription into the Student/User tables, like creating a new student.
-   * Uses the authenticated user's company_id and StudentsService.create.
+   * Sync a pre-inscription into the Student/User tables (same conversion as admin approval when applicable).
+   * Uses the authenticated user's company_id; assigns matricule d'école automatically.
    */
   @Post(':id/sync-to-student')
   @UseGuards(JwtAuthGuard)

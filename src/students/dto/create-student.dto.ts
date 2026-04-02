@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsNumber, IsDateString, Min, Max } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsNumber, IsDateString, Min, Max, MaxLength } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 
 export class CreateStudentDto {
@@ -85,6 +85,26 @@ export class CreateStudentDto {
   @Min(-2)
   @Max(2)
   status?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'School matricule (YYYY + 5 digits). Usually assigned automatically when converting from pre-inscription; optional on manual create.',
+    example: '202600001',
+    maxLength: 32,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(32)
+  matricule_ecole?: string;
+
+  @ApiPropertyOptional({
+    description: 'State / official matricule (entered manually by admin)',
+    maxLength: 64,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  matricule_etat?: string;
 
   @ApiPropertyOptional({ description: 'Owning company identifier (automatically set from authenticated user)', example: 4 })
   @IsOptional()
