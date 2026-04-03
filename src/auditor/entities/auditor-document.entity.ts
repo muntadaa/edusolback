@@ -15,7 +15,11 @@ import { RequiredDoc } from '../../required-docs/entities/required-doc.entity';
 import { User } from '../../users/entities/user.entity';
 import { AuditorDocumentStatus } from '../enums/auditor-document-status.enum';
 
-@Entity('auditor')
+/**
+ * synchronize: false — avoids TypeORM dev sync issuing DROP INDEX on UQ_auditor_student_template,
+ * which MySQL rejects when that index backs FK constraints (ER_DROP_INDEX_FK). Apply DDL via migrations / manual SQL.
+ */
+@Entity('auditor', { synchronize: false })
 @Index('UQ_auditor_student_template', ['student_id', 'required_doc_id'], {
   unique: true,
 })

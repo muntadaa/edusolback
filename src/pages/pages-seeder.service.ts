@@ -77,6 +77,7 @@ export class PagesSeederService implements OnModuleInit {
       { route: '/student-contacts', title: 'Student Contacts' },
       { route: '/student-link-types', title: 'Student Link Types' },
       { route: '/student-notes', title: 'Student Notes' },
+      { route: '/student-promotion', title: 'Student Promotion' },
       { route: '/preinscriptions', title: 'Pre-inscriptions' },
       { route: '/preinscriptions/assignment', title: 'Pre-inscriptions Assignment' },
       { route: '/preinscriptions/commercial', title: 'Pre-inscriptions Commercial' },

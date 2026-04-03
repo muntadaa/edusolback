@@ -32,19 +32,9 @@ export class SchoolYearsService {
 
     const lifecycleStatus = dto.lifecycle_status || 'planned';
     
-    // Validation: Maximum one ongoing school year (max 1)
-    // Note: 0 ongoing years is allowed (for initial setup), but frontend should show a warning
+    // At most one ongoing school year per company (0 allowed).
     if (lifecycleStatus === 'ongoing') {
-      const existingOngoing = await this.schoolYearRepo.findOne({
-        where: { 
-          company_id: companyId, 
-          lifecycle_status: 'ongoing',
-          status: Not(-2)
-        }
-      });
-      if (existingOngoing) {
-        throw new BadRequestException('There must be at most one ongoing school year. Another school year is already ongoing.');
-      }
+      await this.assertNoOtherOngoingSchoolYear(companyId);
     }
 
     const schoolYear = this.schoolYearRepo.create({
@@ -56,6 +46,24 @@ export class SchoolYearsService {
       company,
     });
     return this.schoolYearRepo.save(schoolYear);
+  }
+
+  /** Ensures no other school year in this company is already `ongoing`. */
+  private async assertNoOtherOngoingSchoolYear(companyId: number, excludeSchoolYearId?: number): Promise<void> {
+    const qb = this.schoolYearRepo
+      .createQueryBuilder('sy')
+      .where('sy.company_id = :companyId', { companyId })
+      .andWhere('sy.lifecycle_status = :ongoing', { ongoing: 'ongoing' })
+      .andWhere('sy.status <> :deleted', { deleted: -2 });
+    if (excludeSchoolYearId != null) {
+      qb.andWhere('sy.id <> :excludeId', { excludeId: excludeSchoolYearId });
+    }
+    const existing = await qb.getOne();
+    if (existing) {
+      throw new BadRequestException(
+        'There must be at most one ongoing school year for your company. Another school year is already ongoing.',
+      );
+    }
   }
 
   async findAll(query: SchoolYearQueryDto | undefined, companyId: number) {
@@ -119,29 +127,10 @@ export class SchoolYearsService {
     const dtoWithoutCompany = { ...dto };
     delete (dtoWithoutCompany as any).companyId;
     
-    const currentLifecycleStatus = schoolYear.lifecycle_status;
-    const newLifecycleStatus = dto.lifecycle_status !== undefined ? dto.lifecycle_status : currentLifecycleStatus;
-    
-    // Validation: Maximum one ongoing school year (max 1)
-    // Note: 0 ongoing years is allowed (for initial setup), but frontend should show a warning
-    if (newLifecycleStatus === 'ongoing' && currentLifecycleStatus !== 'ongoing') {
-      // Trying to set this year to ongoing, but another one might already be ongoing
-      const existingOngoing = await this.schoolYearRepo.findOne({
-        where: { 
-          company_id: companyId, 
-          lifecycle_status: 'ongoing',
-          status: Not(-2),
-          id: Not(id) // Exclude current year
-        }
-      });
-      if (existingOngoing) {
-        throw new BadRequestException('There must be at most one ongoing school year. Another school year is already ongoing.');
-      }
-    }
-    // Note: Allowing change from ongoing to another status even if it's the only one
-    // Frontend should check and show a warning if no ongoing years exist
-    
     Object.assign(schoolYear, dtoWithoutCompany);
+    if (schoolYear.lifecycle_status === 'ongoing') {
+      await this.assertNoOtherOngoingSchoolYear(companyId, id);
+    }
     // Ensure company remains from authenticated user
     schoolYear.company = { id: companyId } as any;
     

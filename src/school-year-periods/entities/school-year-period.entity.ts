@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 't
 import { Company } from '../../company/entities/company.entity';
 import { SchoolYear } from 'src/school-years/entities/school-year.entity';
 
+/** At most one row per company may have `lifecycle_status === 'ongoing'` (enforced in {@link SchoolYearPeriodsService}). */
 @Entity('school_year_periods')
 export class SchoolYearPeriod {
   @PrimaryGeneratedColumn()

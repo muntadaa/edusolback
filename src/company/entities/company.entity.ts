@@ -4,6 +4,21 @@ import { Module } from '../../module/entities/module.entity';
 import { Course } from '../../course/entities/course.entity';
 import { SchoolYear } from 'src/school-years/entities/school-year.entity';
 
+/**
+ * Company-scoped branding for the app and for generated PDFs.
+ *
+ * **Logo:** `logo` is a single file path; placement is controlled by booleans (not a second file):
+ * - `logo_left` / `logo_right` — same image may appear on the left, right, both, or neither.
+ *
+ * **Header / footer lines (PDF & print):** up to three optional lines each:
+ * - `entete_1` … `entete_3` — header band text
+ * - `pied_1` … `pied_3` — footer band text
+ *
+ * **Letterhead:** `papier_entete` — when true, PDF generators should omit embedded entête/pied
+ * (and typically the repeated company name block) because the physical sheet already carries them.
+ *
+ * **Colors:** `primaryColor` (#RRGGBB) drives accent styling where supported (UI + branded PDFs).
+ */
 @Entity('companies')
 export class Company {
   @PrimaryGeneratedColumn()

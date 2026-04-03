@@ -54,6 +54,7 @@ import { PreInscriptionDiplomaModule } from './pre-inscription-diploma/pre-inscr
 import { StudentPresenceValidationModule } from './student_presence_validation/student_presence_validation.module';
 import { RequiredDocsModule } from './required-docs/required-docs.module';
 import { AuditorModule } from './auditor/auditor.module';
+import { PdfModule } from './pdf/pdf.module';
 
 @Module({
   imports: [
@@ -122,6 +123,7 @@ import { AuditorModule } from './auditor/auditor.module';
     StudentPresenceValidationModule,
     RequiredDocsModule,
     AuditorModule,
+    PdfModule,
   ],
   controllers: [AppController],
   providers: [

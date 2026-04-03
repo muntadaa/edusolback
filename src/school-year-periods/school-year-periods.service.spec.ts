@@ -62,15 +62,18 @@ describe('SchoolYearPeriodsService', () => {
         status: 'active',
         schoolYearId: 2,
       } as any;
-      const parent = { id: 2 } as SchoolYear;
+      const parent = { id: 2, company: { id: 5 } } as SchoolYear;
       const period = { id: 1 } as SchoolYearPeriod;
       schoolYearRepo.findOne!.mockResolvedValue(parent);
       periodRepo.create!.mockReturnValue(period);
       periodRepo.save!.mockResolvedValue(period);
 
-      const result = await service.create(dto);
+      const result = await service.create(dto, 5);
 
-      expect(schoolYearRepo.findOne).toHaveBeenCalledWith({ where: { id: 2, status: Not(-2) } });
+      expect(schoolYearRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 2, status: Not(-2) },
+        relations: ['company'],
+      });
       expect(periodRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           title: 'Q1',
@@ -86,26 +89,32 @@ describe('SchoolYearPeriodsService', () => {
       schoolYearRepo.findOne!.mockResolvedValue(null);
 
       await expect(
-        service.create({
-          title: 'Q1',
-          start_date: '2024-09-01',
-          end_date: '2024-12-31',
-          schoolYearId: 2,
-        } as any),
+        service.create(
+          {
+            title: 'Q1',
+            start_date: '2024-09-01',
+            end_date: '2024-12-31',
+            schoolYearId: 2,
+          } as any,
+          1,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('should reject invalid date ranges', async () => {
-      const parent = { id: 2 } as SchoolYear;
+      const parent = { id: 2, company: { id: 1 } } as SchoolYear;
       schoolYearRepo.findOne!.mockResolvedValue(parent);
 
       await expect(
-        service.create({
-          title: 'Invalid',
-          start_date: '2024-10-01',
-          end_date: '2024-09-01',
-          schoolYearId: 2,
-        } as any),
+        service.create(
+          {
+            title: 'Invalid',
+            start_date: '2024-10-01',
+            end_date: '2024-09-01',
+            schoolYearId: 2,
+          } as any,
+          1,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -117,9 +126,10 @@ describe('SchoolYearPeriodsService', () => {
       qb.getManyAndCount.mockResolvedValue([[{ id: 1 } as SchoolYearPeriod], 1]);
       const query: SchoolYearPeriodQueryDto = { page: 2, limit: 5, title: 'Q' };
 
-      const result = await service.findAll(query);
+      const result = await service.findAll(query, 1);
 
       expect(periodRepo.createQueryBuilder).toHaveBeenCalledWith('p');
+      expect(qb.andWhere).toHaveBeenCalledWith('p.company_id = :company_id', { company_id: 1 });
       expect(qb.andWhere).toHaveBeenCalledWith('p.status <> :deletedStatus', { deletedStatus: -2 });
       expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('p.schoolYear', 'schoolYear');
       expect(qb.orderBy).toHaveBeenCalledWith('p.id', 'DESC');
@@ -142,11 +152,12 @@ describe('SchoolYearPeriodsService', () => {
       const period = { id: 1, status: 1 } as SchoolYearPeriod;
       periodRepo.findOne!.mockResolvedValue(period);
 
-      const result = await service.findOne(1);
+      const result = await service.findOne(1, 1);
 
       expect(periodRepo.findOne).toHaveBeenCalledTimes(1);
       const args = periodRepo.findOne.mock.calls[0][0] as any;
       expect(args.where.id).toBe(1);
+      expect(args.where.company_id).toBe(1);
       expect(args.where.status).toEqual(expect.objectContaining({ value: -2 }));
       expect(args.relations).toEqual(['schoolYear']);
       expect(result).toBe(period);
@@ -155,7 +166,7 @@ describe('SchoolYearPeriodsService', () => {
     it('should throw NotFoundException when missing', async () => {
       periodRepo.findOne!.mockResolvedValue(null);
 
-      await expect(service.findOne(1)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(1, 1)).rejects.toThrow(NotFoundException);
     });
 
   });
@@ -168,8 +179,10 @@ describe('SchoolYearPeriodsService', () => {
         start_date: new Date('2024-09-01'),
         end_date: new Date('2024-12-31'),
         status: 1,
+        lifecycle_status: 'planned',
+        school_year_id: 2,
       } as unknown as SchoolYearPeriod;
-      const parent = { id: 3 } as SchoolYear;
+      const parent = { id: 3, company: { id: 1 } } as SchoolYear;
       const dto = {
         title: 'Q2',
         start_date: '2025-01-01',
@@ -183,10 +196,13 @@ describe('SchoolYearPeriodsService', () => {
       schoolYearRepo.findOne!.mockResolvedValue(parent);
       periodRepo.save!.mockResolvedValue(period);
 
-      const result = await service.update(1, dto);
+      const result = await service.update(1, dto, 1);
 
-      expect(findOneSpy).toHaveBeenCalledWith(1);
-      expect(schoolYearRepo.findOne).toHaveBeenCalledWith({ where: { id: 3, status: Not(-2) } });
+      expect(findOneSpy).toHaveBeenCalledWith(1, 1);
+      expect(schoolYearRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 3, status: Not(-2) },
+        relations: ['company'],
+      });
       expect(period.status).toBe(-1);
       expect(period.title).toBe('Q2');
       expect(period.schoolYear).toBe(parent);
@@ -204,9 +220,9 @@ describe('SchoolYearPeriodsService', () => {
         .mockResolvedValue(period);
       periodRepo.remove!.mockResolvedValue(period);
 
-      const result = await service.remove(1);
+      const result = await service.remove(1, 1);
 
-      expect(findOneSpy).toHaveBeenCalledWith(1);
+      expect(findOneSpy).toHaveBeenCalledWith(1, 1);
       expect(periodRepo.remove).toHaveBeenCalledWith(period);
       expect(result).toBe(period);
       findOneSpy.mockRestore();

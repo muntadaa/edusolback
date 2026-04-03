@@ -68,7 +68,7 @@ describe('SchoolYearsService', () => {
       schoolYearRepo.create!.mockReturnValue(schoolYear);
       schoolYearRepo.save!.mockResolvedValue(schoolYear);
 
-      const result = await service.create(dto);
+      const result = await service.create(dto, 5);
 
       expect(companyRepo.findOne).toHaveBeenCalledWith({ where: { id: 5, status: Not(-2) } });
       expect(schoolYearRepo.create).toHaveBeenCalledWith({
@@ -76,6 +76,7 @@ describe('SchoolYearsService', () => {
         start_date: '2024-09-01',
         end_date: '2025-06-30',
         status: 1,
+        lifecycle_status: 'planned',
         company,
       });
       expect(schoolYearRepo.save).toHaveBeenCalledWith(schoolYear);
@@ -86,12 +87,15 @@ describe('SchoolYearsService', () => {
       companyRepo.findOne!.mockResolvedValue(null);
 
       await expect(
-        service.create({
-          title: '2024',
-          start_date: '2024-09-01',
-          end_date: '2025-06-30',
-          companyId: 1,
-        } as any),
+        service.create(
+          {
+            title: '2024',
+            start_date: '2024-09-01',
+            end_date: '2025-06-30',
+            companyId: 1,
+          } as any,
+          1,
+        ),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -99,12 +103,15 @@ describe('SchoolYearsService', () => {
       companyRepo.findOne!.mockResolvedValue({ id: 1 } as Company);
 
       await expect(
-        service.create({
-          title: '2024',
-          start_date: '2024-09-01',
-          end_date: 'invalid',
-          companyId: 1,
-        } as any),
+        service.create(
+          {
+            title: '2024',
+            start_date: '2024-09-01',
+            end_date: 'invalid',
+            companyId: 1,
+          } as any,
+          1,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -116,9 +123,10 @@ describe('SchoolYearsService', () => {
       qb.getManyAndCount.mockResolvedValue([[{ id: 1 } as SchoolYear], 1]);
       const query: SchoolYearQueryDto = { page: 2, limit: 3, title: '2024' };
 
-      const result = await service.findAll(query);
+      const result = await service.findAll(query, 7);
 
       expect(schoolYearRepo.createQueryBuilder).toHaveBeenCalledWith('sy');
+      expect(qb.andWhere).toHaveBeenCalledWith('company.id = :companyId', { companyId: 7 });
       expect(qb.andWhere).toHaveBeenCalledWith('sy.status <> :deletedStatus', { deletedStatus: -2 });
       expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('sy.company', 'company');
       expect(qb.skip).toHaveBeenCalledWith(3);
@@ -137,10 +145,10 @@ describe('SchoolYearsService', () => {
 
   describe('findOne', () => {
     it('should return school year when found', async () => {
-      const schoolYear = { id: 1, status: 1 } as SchoolYear;
+      const schoolYear = { id: 1, status: 1, company: { id: 1 } } as SchoolYear;
       schoolYearRepo.findOne!.mockResolvedValue(schoolYear);
 
-      const result = await service.findOne(1);
+      const result = await service.findOne(1, 1);
 
       expect(schoolYearRepo.findOne).toHaveBeenCalledTimes(1);
       const args = schoolYearRepo.findOne.mock.calls[0][0] as any;
@@ -153,23 +161,23 @@ describe('SchoolYearsService', () => {
     it('should throw NotFoundException when absent', async () => {
       schoolYearRepo.findOne!.mockResolvedValue(null);
 
-      await expect(service.findOne(1)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne(1, 1)).rejects.toThrow(NotFoundException);
     });
 
   });
 
   describe('update', () => {
     it('should merge updates and save', async () => {
-      const schoolYear = { id: 1, title: 'Old' } as SchoolYear;
+      const schoolYear = { id: 1, title: 'Old', lifecycle_status: 'planned' } as SchoolYear;
       const dto = { title: 'New' } as any;
       const findOneSpy = jest
         .spyOn(service, 'findOne')
         .mockResolvedValue(schoolYear);
       schoolYearRepo.save!.mockResolvedValue(schoolYear);
 
-      const result = await service.update(1, dto);
+      const result = await service.update(1, dto, 1);
 
-      expect(findOneSpy).toHaveBeenCalledWith(1);
+      expect(findOneSpy).toHaveBeenCalledWith(1, 1);
       expect(schoolYear.title).toBe('New');
       expect(schoolYearRepo.save).toHaveBeenCalledWith(schoolYear);
       expect(result).toBe(schoolYear);
@@ -185,9 +193,9 @@ describe('SchoolYearsService', () => {
         .mockResolvedValue(schoolYear);
       schoolYearRepo.remove!.mockResolvedValue(schoolYear);
 
-      const result = await service.remove(1);
+      const result = await service.remove(1, 1);
 
-      expect(findOneSpy).toHaveBeenCalledWith(1);
+      expect(findOneSpy).toHaveBeenCalledWith(1, 1);
       expect(schoolYearRepo.remove).toHaveBeenCalledWith(schoolYear);
       expect(result).toBe(schoolYear);
       findOneSpy.mockRestore();

@@ -16,6 +16,24 @@ export class SchoolYearPeriodsService {
     private readonly schoolYearRepo: Repository<SchoolYear>,
   ) {}
 
+  /** At most one ongoing period per company (0 allowed). */
+  private async assertNoOtherOngoingPeriod(companyId: number, excludePeriodId?: number): Promise<void> {
+    const qb = this.periodRepo
+      .createQueryBuilder('p')
+      .where('p.company_id = :companyId', { companyId })
+      .andWhere('p.lifecycle_status = :ongoing', { ongoing: 'ongoing' })
+      .andWhere('p.status <> :deleted', { deleted: -2 });
+    if (excludePeriodId != null) {
+      qb.andWhere('p.id <> :excludeId', { excludeId: excludePeriodId });
+    }
+    const existing = await qb.getOne();
+    if (existing) {
+      throw new BadRequestException(
+        'There must be at most one ongoing school year period for your company. Another period is already ongoing.',
+      );
+    }
+  }
+
   private mapStatus(s: any): number {
     if (typeof s === 'number' && !Number.isNaN(s)) return s;
     if (s == null) return 2;
@@ -50,21 +68,9 @@ export class SchoolYearPeriodsService {
     }
 
     const lifecycleStatus = dto.lifecycle_status || 'planned';
-    
-    // Validation: Maximum one ongoing period per school year (max 1)
-    // Note: 0 ongoing periods per school year is allowed (for initial setup), but frontend should show a warning
+
     if (lifecycleStatus === 'ongoing') {
-      const existingOngoing = await this.periodRepo.findOne({
-        where: { 
-          school_year_id: dto.schoolYearId,
-          company_id: companyId,
-          lifecycle_status: 'ongoing',
-          status: Not(-2)
-        }
-      });
-      if (existingOngoing) {
-        throw new BadRequestException('There must be at most one ongoing period per school year. Another period in this school year is already ongoing.');
-      }
+      await this.assertNoOtherOngoingPeriod(companyId);
     }
 
     // Always set company_id from authenticated user
@@ -141,10 +147,6 @@ export class SchoolYearPeriodsService {
   async update(id: number, dto: UpdateSchoolYearPeriodDto, companyId: number) {
     const period = await this.findOne(id, companyId);
 
-    const targetSchoolYearId = dto.schoolYearId || period.school_year_id;
-    const currentLifecycleStatus = period.lifecycle_status;
-    const newLifecycleStatus = dto.lifecycle_status !== undefined ? dto.lifecycle_status : currentLifecycleStatus;
-
     if (dto.schoolYearId) {
       // Verify school year exists and belongs to the same company
       const parent = await this.schoolYearRepo.findOne({ 
@@ -168,26 +170,6 @@ export class SchoolYearPeriodsService {
       throw new BadRequestException('end_date must be greater than start_date');
     }
 
-    // Validation: Maximum one ongoing period per school year (max 1)
-    // Note: 0 ongoing periods per school year is allowed (for initial setup), but frontend should show a warning
-    if (newLifecycleStatus === 'ongoing' && currentLifecycleStatus !== 'ongoing') {
-      // Trying to set this period to ongoing, but another one might already be ongoing in the same school year
-      const existingOngoing = await this.periodRepo.findOne({
-        where: { 
-          school_year_id: targetSchoolYearId,
-          company_id: companyId,
-          lifecycle_status: 'ongoing',
-          status: Not(-2),
-          id: Not(id) // Exclude current period
-        }
-      });
-      if (existingOngoing) {
-        throw new BadRequestException('There must be at most one ongoing period per school year. Another period in this school year is already ongoing.');
-      }
-    }
-    // Note: Allowing change from ongoing to another status even if it's the only one in the school year
-    // Frontend should check and show a warning if no ongoing periods exist for a school year
-
     if (dto.title !== undefined) period.title = dto.title;
     if (dto.start_date !== undefined) period.start_date = start;
     if (dto.end_date !== undefined) period.end_date = end;
@@ -197,6 +179,10 @@ export class SchoolYearPeriodsService {
     // Prevent changing company_id - always use authenticated user's company
     period.company_id = companyId;
     period.company = { id: companyId } as any;
+
+    if (period.lifecycle_status === 'ongoing') {
+      await this.assertNoOtherOngoingPeriod(companyId, id);
+    }
 
     return this.periodRepo.save(period);
   }
