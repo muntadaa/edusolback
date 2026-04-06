@@ -21,6 +21,7 @@ import { StudentContact } from '../student-contact/entities/student-contact.enti
 import { StudentLinkType } from '../studentlinktype/entities/studentlinktype.entity';
 import { ClassEntity } from '../class/entities/class.entity';
 import { UsersService } from '../users/users.service';
+import { passwordSetTokenLookup } from '../common/utils/password-invite-token.util';
 import { RolesService } from '../roles/roles.service';
 import { UserRolesService } from '../user-roles/user-roles.service';
 import { StudentAccountingService } from '../student-accounting/student-accounting.service';
@@ -159,6 +160,7 @@ export class StudentsService {
             password: null,
             status: 2, // Set to pending (2)
             password_set_token: hashedToken,
+            password_set_token_lookup: passwordSetTokenLookup(plainToken),
             password_set_token_expires_at: tokenExpiresAt,
           });
           const restoredUser = await this.userRepository.save(deletedUser);

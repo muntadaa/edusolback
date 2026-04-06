@@ -1,6 +1,12 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository, QueryFailedError } from 'typeorm';
+import { In, Not, Repository, QueryFailedError } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
@@ -11,8 +17,15 @@ import { User } from '../users/entities/user.entity';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaginationService } from '../common/services/pagination.service';
 import { UsersService } from '../users/users.service';
+import { passwordSetTokenLookup } from '../common/utils/password-invite-token.util';
 import { RolesService } from '../roles/roles.service';
 import { UserRolesService } from '../user-roles/user-roles.service';
+import { Student } from '../students/entities/student.entity';
+import { ClassStudent } from '../class-student/entities/class-student.entity';
+import { StudentsPlanning } from '../students-plannings/entities/students-planning.entity';
+import { MailService } from '../mail/mail.service';
+import { MAX_STUDENTS_PER_SHARE, ShareTeacherResourceDto } from './dto/share-teacher-resource.dto';
+import * as path from 'path';
 
 @Injectable()
 export class TeachersService {
@@ -23,9 +36,14 @@ export class TeachersService {
     private teacherRepository: Repository<Teacher>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(Student)
+    private studentRepository: Repository<Student>,
+    @InjectRepository(ClassStudent)
+    private classStudentRepository: Repository<ClassStudent>,
     private usersService: UsersService,
     private rolesService: RolesService,
     private userRolesService: UserRolesService,
+    private mailService: MailService,
   ) {}
 
   async create(createTeacherDto: CreateTeacherDto, companyId: number): Promise<Teacher> {
@@ -133,6 +151,7 @@ export class TeachersService {
             password: null,
             status: 2, // Set to pending (2)
             password_set_token: hashedToken,
+            password_set_token_lookup: passwordSetTokenLookup(plainToken),
             password_set_token_expires_at: tokenExpiresAt,
           });
           const restoredUser = await this.userRepository.save(deletedUser);
@@ -466,5 +485,233 @@ export class TeachersService {
   async sendPasswordInvitation(teacherId: number, companyId: number): Promise<{ message: string }> {
     const teacher = await this.findOne(teacherId, companyId);
     return await this.usersService.sendPasswordInvitationByEmail(teacher.email, companyId);
+  }
+
+  private requesterHasAdminRole(requestUser: User): boolean {
+    return (
+      requestUser.userRoles?.some((ur) => String(ur.role?.code ?? '').toLowerCase() === 'admin') ?? false
+    );
+  }
+
+  private requesterHasTeacherRole(requestUser: User): boolean {
+    return (
+      requestUser.userRoles?.some((ur) => String(ur.role?.code ?? '').toLowerCase() === 'teacher') ?? false
+    );
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  private sanitizeAttachmentFilename(name: string): string {
+    const base = path.basename(name || 'attachment').replace(/[^\w.\-()+ ]/g, '_');
+    return base.slice(0, 200) || 'attachment';
+  }
+
+  /** Bulk: student ids this teacher may contact via class + planning (same company). */
+  private async getTeacherReachableStudentIdSet(
+    teacherId: number,
+    studentIds: number[],
+    companyId: number,
+  ): Promise<Set<number>> {
+    if (studentIds.length === 0) {
+      return new Set();
+    }
+    const rows = await this.classStudentRepository
+      .createQueryBuilder('cs')
+      .select('cs.student_id', 'student_id')
+      .distinct(true)
+      .innerJoin(
+        StudentsPlanning,
+        'ps',
+        'ps.class_id = cs.class_id AND ps.teacher_id = :teacherId AND ps.status <> :pdel',
+        { teacherId, pdel: -2 },
+      )
+      .where('cs.student_id IN (:...ids)', { ids: studentIds })
+      .andWhere('cs.company_id = :companyId', { companyId })
+      .andWhere('cs.class_id IS NOT NULL')
+      .andWhere('cs.status <> :del', { del: -2 })
+      .getRawMany<Record<string, unknown>>();
+    const parsed = rows
+      .map((r) => {
+        const v = r.student_id ?? r.cs_student_id;
+        if (typeof v === 'string') return parseInt(v, 10);
+        if (typeof v === 'number') return v;
+        return NaN;
+      })
+      .filter((n) => Number.isFinite(n) && n >= 1);
+    return new Set(parsed);
+  }
+
+  private parseStudentIdsFromDto(dto: ShareTeacherResourceDto): number[] {
+    if (!dto.student_id?.trim() && !dto.student_ids?.trim()) {
+      throw new BadRequestException('Provide student_id and/or student_ids');
+    }
+    const ids = new Set<number>();
+    if (dto.student_id?.trim()) {
+      const n = parseInt(dto.student_id.trim(), 10);
+      if (!Number.isFinite(n) || n < 1) {
+        throw new BadRequestException('Invalid student_id');
+      }
+      ids.add(n);
+    }
+    if (dto.student_ids?.trim()) {
+      const parts = dto.student_ids
+        .split(/[,\s]+/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      for (const part of parts) {
+        const n = parseInt(part, 10);
+        if (!Number.isFinite(n) || n < 1) {
+          throw new BadRequestException(`Invalid student id in student_ids: "${part}"`);
+        }
+        ids.add(n);
+      }
+    }
+    const arr = [...ids].sort((a, b) => a - b);
+    if (arr.length === 0) {
+      throw new BadRequestException('Provide at least one valid student id');
+    }
+    if (arr.length > MAX_STUDENTS_PER_SHARE) {
+      throw new BadRequestException(`At most ${MAX_STUDENTS_PER_SHARE} students per request`);
+    }
+    return arr;
+  }
+
+  private buildShareResourceEmailHtml(
+    studentFirstName: string,
+    teacherName: string,
+    linkTrimmed: string,
+    linkHref: string,
+    description: string | undefined,
+    hasFile: boolean,
+  ): string {
+    const parts: string[] = [];
+    parts.push(`<p>Hello ${this.escapeHtml(studentFirstName)},</p>`);
+    parts.push(
+      `<p><strong>${this.escapeHtml(teacherName)}</strong> shared something with you from your school.</p>`,
+    );
+    if (description?.trim()) {
+      parts.push(
+        `<div style="margin:16px 0;">${this.escapeHtml(description.trim()).replace(/\n/g, '<br/>')}</div>`,
+      );
+    }
+    if (linkHref) {
+      parts.push(
+        `<p>Link: <a href="${this.escapeHtml(linkHref)}">${this.escapeHtml(linkTrimmed)}</a></p>`,
+      );
+    }
+    if (hasFile) {
+      parts.push('<p>An attachment is included with this email.</p>');
+    }
+    parts.push('<p style="color:#64748b;font-size:12px;">This message was sent by your school.</p>');
+    return `<!DOCTYPE html><html><body style="font-family:sans-serif;line-height:1.5;">${parts.join('')}</body></html>`;
+  }
+
+  /**
+   * Email a link and/or attachment to one or more students (teacher portal).
+   * Admins may send to any student in the company; teachers only to students in their planned classes.
+   */
+  async shareResourceWithStudent(
+    dto: ShareTeacherResourceDto,
+    file: Express.Multer.File | undefined,
+    requestUser: User,
+    companyId: number,
+  ): Promise<{ message: string; count: number }> {
+    const isAdmin = this.requesterHasAdminRole(requestUser);
+    const isTeacherRole = this.requesterHasTeacherRole(requestUser);
+    if (!isAdmin && !isTeacherRole) {
+      throw new ForbiddenException('Only teachers or administrators can share resources with students.');
+    }
+
+    const studentIds = this.parseStudentIdsFromDto(dto);
+
+    const linkTrimmed = dto.link?.trim() ?? '';
+    const hasFile = !!file?.buffer && file.size > 0;
+    if (!linkTrimmed && !hasFile) {
+      throw new BadRequestException('Provide at least one of: link or file');
+    }
+
+    let linkHref = '';
+    if (linkTrimmed) {
+      try {
+        const u = new URL(linkTrimmed);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+          throw new BadRequestException('link must use http or https');
+        }
+        linkHref = u.href;
+      } catch (e) {
+        if (e instanceof BadRequestException) throw e;
+        throw new BadRequestException('link must be a valid URL');
+      }
+    }
+
+    const students = await this.studentRepository.find({
+      where: { id: In(studentIds), company_id: companyId, status: Not(-2) },
+    });
+    const foundIds = new Set(students.map((s) => s.id));
+    const missing = studentIds.filter((id) => !foundIds.has(id));
+    if (missing.length > 0) {
+      throw new NotFoundException(
+        missing.length === 1
+          ? 'Student not found'
+          : `Students not found: ${missing.join(', ')}`,
+      );
+    }
+
+    if (!isAdmin) {
+      const teacher = await this.teacherRepository.findOne({
+        where: { email: requestUser.email, company_id: companyId, status: Not(-2) },
+      });
+      if (!teacher) {
+        throw new ForbiddenException('No teacher profile matches your account for this company.');
+      }
+      const allowed = await this.getTeacherReachableStudentIdSet(teacher.id, studentIds, companyId);
+      const forbidden = studentIds.filter((id) => !allowed.has(id));
+      if (forbidden.length > 0) {
+        throw new ForbiddenException(
+          forbidden.length === 1
+            ? 'You can only share resources with students who are in a class you teach (planning).'
+            : `Not allowed to contact some students (not in your classes/planning): ${forbidden.join(', ')}`,
+        );
+      }
+    }
+
+    const teacherName = `${requestUser.username}`;
+    const desc = dto.description;
+    const attachments =
+      hasFile && file
+        ? [
+            {
+              filename: this.sanitizeAttachmentFilename(file.originalname),
+              content: file.buffer,
+              contentType: file.mimetype || undefined,
+            },
+          ]
+        : undefined;
+
+    const byId = new Map(students.map((s) => [s.id, s]));
+    for (const id of studentIds) {
+      const student = byId.get(id)!;
+      const html = this.buildShareResourceEmailHtml(
+        student.first_name,
+        teacherName,
+        linkTrimmed,
+        linkHref,
+        desc,
+        hasFile,
+      );
+      await this.mailService.sendMailWithAttachments(student.email, dto.title.trim(), html, attachments);
+    }
+
+    const n = studentIds.length;
+    return {
+      message: n === 1 ? `Resource sent to ${byId.get(studentIds[0])!.email}` : `Resource sent to ${n} students`,
+      count: n,
+    };
   }
 }

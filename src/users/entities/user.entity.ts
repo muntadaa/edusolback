@@ -47,7 +47,11 @@ export class User {
   
   @Column({ type: 'varchar', nullable: true, name: 'password_set_token' })
   password_set_token: string | null;
-  
+
+  /** SHA-256 hex of plain invite token — for O(1) lookup before a single bcrypt.compare. */
+  @Column({ type: 'varchar', length: 64, nullable: true, name: 'password_set_token_lookup' })
+  password_set_token_lookup: string | null;
+
   @Column({ type: 'datetime', nullable: true, name: 'password_set_token_expires_at' })
   password_set_token_expires_at: Date | null;
   

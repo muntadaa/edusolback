@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import { UserRolesService } from '../user-roles/user-roles.service';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
+import { passwordSetTokenLookup } from '../common/utils/password-invite-token.util';
 
 @Injectable()
 export class UsersService {
@@ -142,6 +143,7 @@ export class UsersService {
             password: null,
             status: createUserDto.status ?? 2, // Default to pending (2) if not specified
             password_set_token: hashedToken,
+            password_set_token_lookup: passwordSetTokenLookup(plainToken),
             password_set_token_expires_at: tokenExpiresAt,
           });
         } else {
@@ -157,6 +159,7 @@ export class UsersService {
             password: createUserDto.password,
             status: createUserDto.status ?? 1,
             password_set_token: null,
+            password_set_token_lookup: null,
             password_set_token_expires_at: null,
           });
         }
@@ -180,6 +183,7 @@ export class UsersService {
         // Add token fields if password is not provided
         if (plainToken) {
           userData.password_set_token = await this.hashToken(plainToken);
+          userData.password_set_token_lookup = passwordSetTokenLookup(plainToken);
           userData.password_set_token_expires_at = tokenExpiresAt;
         }
 
@@ -318,6 +322,7 @@ export class UsersService {
 
     // Update user with new token
     user.password_set_token = hashedToken;
+    user.password_set_token_lookup = passwordSetTokenLookup(plainToken);
     user.password_set_token_expires_at = tokenExpiresAt;
     await this.userRepository.save(user);
 
@@ -453,22 +458,47 @@ export class UsersService {
    * @returns User if token is valid, throws exception otherwise
    */
   async validatePasswordSetToken(token: string): Promise<User> {
-    const users = await this.userRepository
+    const lookup = passwordSetTokenLookup(token);
+
+    const byLookup = await this.userRepository.findOne({
+      where: {
+        password_set_token_lookup: lookup,
+        status: Not(-2),
+      },
+      relations: ['company'],
+    });
+
+    if (
+      byLookup &&
+      byLookup.password == null &&
+      byLookup.password_set_token &&
+      byLookup.password_set_token_expires_at
+    ) {
+      const isMatch = await this.compareTokens(token, byLookup.password_set_token);
+      if (isMatch) {
+        if (byLookup.password_set_token_expires_at < new Date()) {
+          throw new UnauthorizedException('Token has expired. Please request a new invitation.');
+        }
+        return byLookup;
+      }
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+
+    // Legacy rows created before password_set_token_lookup (still O(n) bcrypt — resend invite to fix).
+    const legacyUsers = await this.userRepository
       .createQueryBuilder('user')
       .where('user.password_set_token IS NOT NULL')
+      .andWhere('user.password_set_token_lookup IS NULL')
       .andWhere('user.password_set_token_expires_at IS NOT NULL')
       .andWhere('user.password IS NULL')
       .andWhere('user.status != :deletedStatus', { deletedStatus: -2 })
       .leftJoinAndSelect('user.company', 'company')
       .getMany();
 
-    // Find user with matching token
-    for (const user of users) {
+    for (const user of legacyUsers) {
       if (!user.password_set_token) continue;
-      
       const isMatch = await this.compareTokens(token, user.password_set_token);
       if (isMatch) {
-        // Check if token is expired
         if (user.password_set_token_expires_at && user.password_set_token_expires_at < new Date()) {
           throw new UnauthorizedException('Token has expired. Please request a new invitation.');
         }
@@ -491,6 +521,7 @@ export class UsersService {
     // Set password and clear token fields
     user.password = password;
     user.password_set_token = null;
+    user.password_set_token_lookup = null;
     user.password_set_token_expires_at = null;
     // Set status to active (1) when password is set
     user.status = 1;

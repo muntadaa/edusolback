@@ -1,14 +1,33 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseInterceptors, UploadedFile, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+  UseGuards,
+  Request,
+  BadRequestException,
+  UsePipes,
+  ValidationPipe,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiConsumes, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { TeachersService } from './teachers.service';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 import { TeachersQueryDto } from './dto/teachers-query.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ShareTeacherResourceDto } from './dto/share-teacher-resource.dto';
 
 @ApiTags('Teachers')
 @ApiBearerAuth()
@@ -70,6 +89,32 @@ export class TeachersController {
       throw new BadRequestException('User must belong to a company');
     }
     return this.teachersService.findAll(query, companyId);
+  }
+
+  @Post('share-resource')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 201, description: 'Resource emailed to one or more students (see count in body).' })
+  @ApiResponse({ status: 400, description: 'Validation error or missing link and file.' })
+  @ApiResponse({ status: 403, description: 'Not a teacher/admin or not allowed to contact this student.' })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: 25 * 1024 * 1024 },
+    }),
+  )
+  shareResource(
+    @Request() req,
+    @Body() body: ShareTeacherResourceDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    const companyId = req.user?.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.teachersService.shareResourceWithStudent(body, file, req.user, companyId);
   }
 
   @Get(':id')

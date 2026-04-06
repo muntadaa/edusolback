@@ -404,6 +404,7 @@ export class PreInscriptionConversionService {
         deletedUser.password = null;
         deletedUser.status = 2;
         deletedUser.password_set_token = null;
+        deletedUser.password_set_token_lookup = null;
         deletedUser.password_set_token_expires_at = null;
         user = await manager.save(User, deletedUser);
       } else {

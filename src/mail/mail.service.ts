@@ -44,14 +44,34 @@ export class MailService {
   }
 
   async sendMail(to: string, subject: string, html: string): Promise<void> {
+    await this.sendMailWithAttachments(to, subject, html, undefined);
+  }
+
+  /**
+   * Send HTML email with optional file attachments (e.g. teacher-shared resources).
+   */
+  async sendMailWithAttachments(
+    to: string,
+    subject: string,
+    html: string,
+    attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>,
+  ): Promise<void> {
     const fromEmail = this.configService.get<string>('EMAIL_USER') || this.configService.get<string>('MAIL_USER');
-    
-    const mailOptions = {
+
+    const mailOptions: nodemailer.SendMailOptions = {
       from: fromEmail,
       to,
       subject,
       html,
     };
+
+    if (attachments?.length) {
+      mailOptions.attachments = attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      }));
+    }
 
     try {
       await this.transporter.sendMail(mailOptions);
