@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseInterceptors, UploadedFile, UseGuards, Request, BadRequestException, UsePipes, ValidationPipe } from '@nestjs/common';
-import { ApiBearerAuth, ApiConsumes, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiConsumes, ApiOkResponse, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { StudentsService } from './students.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
@@ -10,6 +10,7 @@ import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { StudentSummaryResponseDto } from './dto/student-summary-response.dto';
 
 @ApiTags('Students')
 @ApiBearerAuth()
@@ -145,6 +146,22 @@ export class StudentsController {
       throw new BadRequestException('User must belong to a company');
     }
     return this.studentsService.findOneWithAcademic(+id, companyId);
+  }
+
+  @Get(':id/summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiOkResponse({ type: StudentSummaryResponseDto })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Student identity plus classe, specialization, level, and school year (YearGraduation) from the latest class_students assignment; uses class relations when class_id is set, otherwise denormalized class_students relations.',
+  })
+  findOneSummary(@Request() req, @Param('id') id: string) {
+    const companyId = req.user.company_id;
+    if (!companyId) {
+      throw new BadRequestException('User must belong to a company');
+    }
+    return this.studentsService.findOneSummary(+id, companyId);
   }
 
   @Get(':id/details')

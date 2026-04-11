@@ -693,6 +693,85 @@ export class StudentsService {
     };
   }
 
+  /**
+   * Flat profile for UI/print: identity + class name + specialization, level, and school year
+   * from the latest class_students row, preferring linked class relations when present.
+   */
+  async findOneSummary(id: number, companyId: number) {
+    const student = await this.studentRepository.findOne({
+      where: { id, company_id: companyId, status: Not(-2) },
+    });
+    if (!student) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const classStudent = await this.classStudentRepository.findOne({
+      where: {
+        student_id: id,
+        company_id: companyId,
+        status: Not(-2),
+      },
+      relations: [
+        'class',
+        'class.specialization',
+        'class.level',
+        'class.schoolYear',
+        'specialization',
+        'level',
+        'schoolYear',
+      ],
+      order: {
+        tri: 'DESC',
+        created_at: 'DESC',
+      },
+    });
+
+    const cls = classStudent?.class ?? null;
+    const classOk = cls && cls.status !== -2 ? cls : null;
+
+    const specializationTitle =
+      classOk?.specialization?.title ?? classStudent?.specialization?.title ?? null;
+    const levelTitle = classOk?.level?.title ?? classStudent?.level?.title ?? null;
+    const yearTitle = classOk?.schoolYear?.title ?? classStudent?.schoolYear?.title ?? null;
+
+    let classeTitle: string | null = classOk?.title ?? null;
+    if (
+      classStudent?.class_id != null &&
+      (classeTitle == null || String(classeTitle).trim() === '')
+    ) {
+      classeTitle = `class ${classStudent.class_id}`;
+    }
+
+    const fullName = `${student.first_name} ${student.last_name}`.replace(/\s+/g, ' ').trim();
+
+    return {
+      firstName: student.first_name,
+      lastName: student.last_name,
+      fullName,
+      datebirth: this.formatBirthdaySlash(student.birthday),
+      classe: classeTitle,
+      specialization: specializationTitle,
+      level: levelTitle,
+      YearGraduation: yearTitle,
+    };
+  }
+
+  private formatBirthdaySlash(birthday: string | null | undefined): string | null {
+    if (birthday == null || String(birthday).trim() === '') {
+      return null;
+    }
+    const raw = String(birthday).trim();
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+    if (m) {
+      return `${m[1]}/${m[2]}/${m[3]}`;
+    }
+    const m2 = /^(\d{4})\/(\d{2})\/(\d{2})/.exec(raw);
+    if (m2) {
+      return `${m2[1]}/${m2[2]}/${m2[3]}`;
+    }
+    return raw;
+  }
+
   private async assertMatriculeEcoleAvailable(
     companyId: number,
     matricule: string | undefined | null,
